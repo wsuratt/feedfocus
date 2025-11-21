@@ -1,0 +1,46 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.AWS_EC2_HOST }}
+        username: ${{ secrets.AWS_EC2_USER }}
+        key: ${{ secrets.AWS_EC2_KEY }}
+        script: |
+          cd ~/slm-crawl
+          git pull origin main
+          
+          # Update backend
+          source .venv/bin/activate
+          pip install -r requirements.txt
+          
+          # Update environment variables
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" > .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+          echo "ENABLE_POST_COLLECTION_FILTER=true" >> .env
+          
+          # Restart backend
+          pm2 restart insight-feed
+          
+          # Update frontend
+          cd frontend
+          npm install
+          npm run build
+          
+          # Reload Nginx
+          sudo systemctl reload nginx
+          
+          echo "Deployment complete!"
