@@ -19,7 +19,7 @@ Complete guide to deploying Insight Feed on AWS with Docker and GitHub Actions.
 
 ```bash
 # Create repo at https://github.com/new
-git remote add origin git@github.com:YOUR_USERNAME/feedfocus.git
+git remote add origin git@github.com:wsuratt/feedfocus.git
 git push -u origin main
 ```
 
@@ -27,7 +27,7 @@ git push -u origin main
 
 1. **AWS Console** → EC2 → Launch Instance
 2. **Configuration:**
-   - Name: insight-feed-server
+   - Name: focus-feed-server
    - AMI: Ubuntu 22.04 LTS
    - Instance type: t3.small (2 vCPU, 2GB RAM)
    - Create new key pair → Download .pem file
@@ -45,8 +45,8 @@ git push -u origin main
 
 ```bash
 # Connect
-chmod 400 ~/Downloads/your-key.pem
-ssh -i ~/Downloads/your-key.pem ubuntu@YOUR_EC2_IP
+chmod 400 ~/Downloads/feed-focus.pem
+ssh -i ~/Downloads/feed-focus.pem ubuntu@18.220.150.247
 
 # Install Docker
 sudo apt update && sudo apt upgrade -y
@@ -75,7 +75,7 @@ cat ~/.ssh/id_ed25519.pub
 # Copy and add to GitHub Settings → SSH Keys
 
 # Clone repo
-git clone git@github.com:YOUR_USERNAME/feedfocus.git
+git clone git@github.com:wsuratt/feedfocus.git
 cd feedfocus
 
 # Configure environment
@@ -84,21 +84,69 @@ nano .env
 # Add ANTHROPIC_API_KEY and GROQ_API_KEY
 ```
 
-### Step 5: Deploy with Docker
+### Step 5: Build Frontend
+
+```bash
+# Build frontend for production
+cd frontend
+npm install
+npm run build
+cd ..
+
+# Verify build
+ls -la frontend/dist
+```
+
+### Step 6: Initialize Database & Populate Content
+
+```bash
+# Initialize SQLite database (creates tables)
+python db/init_db.py
+
+# Verify database was created
+ls -la insights.db
+
+# Populate with initial topics (start with 10 for testing)
+python automation/initial_population.py 10
+
+# This will:
+# - Discover sources for each topic
+# - Extract insights
+# - Store in SQLite + ChromaDB vector database
+# - Takes ~10-15 minutes for 10 topics
+```
+
+**For full population (200+ topics):**
+```bash
+# Run the full automation (takes 4-6 hours)
+python automation/initial_population.py
+
+# Or in background with logs
+nohup python automation/initial_population.py > population.log 2>&1 &
+
+# Monitor progress
+tail -f population.log
+```
+
+**Resume if interrupted:**
+The script saves checkpoints automatically. Just re-run it:
+```bash
+python automation/initial_population.py
+# It will resume from where it stopped
+```
+
+### Step 7: Deploy with Docker
 
 ```bash
 # Start services
 docker-compose up -d
-
-# Initialize database
-docker-compose exec backend python db/init_db.py
 
 # Check status
 docker-compose ps
 docker-compose logs -f
 ```
 
-### Step 6: Configure Nginx
+### Step 8: Configure Nginx (Optional - for production)
 
 ```bash
 sudo nano /etc/nginx/sites-available/insight-feed
@@ -130,7 +178,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### Step 7: GitHub Actions Auto-Deploy
+### Step 9: GitHub Actions Auto-Deploy
 
 1. GitHub repo → Settings → Secrets → Add:
    - AWS_EC2_HOST = Your EC2 IP
