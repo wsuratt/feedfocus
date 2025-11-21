@@ -1,8 +1,7 @@
-name: Deploy to AWS ECS
+name: Deploy to AWS ECS (Production)
 
+# Only run this workflow manually when you're ready for ECS
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 env:
@@ -10,7 +9,7 @@ env:
   ECR_REPOSITORY: insight-feed
   ECS_SERVICE: insight-feed-service
   ECS_CLUSTER: insight-feed-cluster
-  ECS_TASK_DEFINITION: insight-feed-task
+  ECS_TASK_DEFINITION: .aws/task-definition.json
   CONTAINER_NAME: insight-feed-backend
 
 jobs:

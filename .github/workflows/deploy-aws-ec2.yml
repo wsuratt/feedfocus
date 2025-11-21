@@ -13,34 +13,28 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
     
-    - name: Deploy to EC2
+    - name: Deploy to EC2 with Docker
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.AWS_EC2_HOST }}
         username: ${{ secrets.AWS_EC2_USER }}
         key: ${{ secrets.AWS_EC2_KEY }}
         script: |
-          cd ~/slm-crawl
-          git pull origin main
+          cd ~/feedfocus
           
-          # Update backend
-          source .venv/bin/activate
-          pip install -r requirements.txt
+          # Pull latest code
+          git pull origin main
           
           # Update environment variables
           echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" > .env
           echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
           echo "ENABLE_POST_COLLECTION_FILTER=true" >> .env
           
-          # Restart backend
-          pm2 restart insight-feed
+          # Rebuild and restart with Docker
+          docker-compose pull
+          docker-compose up -d --build
           
-          # Update frontend
-          cd frontend
-          npm install
-          npm run build
+          # Check status
+          docker-compose ps
           
-          # Reload Nginx
-          sudo systemctl reload nginx
-          
-          echo "Deployment complete!"
+          echo "✅ Deployment complete!"
