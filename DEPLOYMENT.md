@@ -149,7 +149,7 @@ docker-compose logs -f
 ### Step 8: Configure Nginx (Optional - for production)
 
 ```bash
-sudo nano /etc/nginx/sites-available/insight-feed
+sudo nano /etc/nginx/sites-available/focus-feed
 ```
 
 Paste this:
@@ -202,7 +202,7 @@ sudo certbot renew --dry-run
 ```
 
 ---
-
+port 8000
 ## Daily Commands
 
 ```bash

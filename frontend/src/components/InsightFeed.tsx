@@ -34,8 +34,8 @@ export function InsightFeed() {
   const [engagedInsights, setEngagedInsights] = useState<Set<string>>(new Set());
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // API URL from environment or default to localhost
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  // API URL - use relative URLs in production (goes through nginx proxy)
+  const API_URL = import.meta.env.VITE_API_URL || '';
 
   useEffect(() => {
     loadInterests();
