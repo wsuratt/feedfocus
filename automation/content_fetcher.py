@@ -3,6 +3,7 @@ Simple content fetcher using crawl4ai
 Extracted from api/agent_runner.py for use in automation
 """
 
+import asyncio
 from crawl4ai import AsyncWebCrawler
 
 
@@ -20,21 +21,25 @@ async def fetch_content_sample(url: str, timeout: int = 30) -> str:
     try:
         if url.lower().endswith('.pdf'):
             return None
-            
-        async with AsyncWebCrawler(
-            browser_type="chromium",
-            headless=True,
-            verbose=False
-        ) as crawler:
-            # Add timeout to prevent hanging
-            result = await crawler.arun(
-                url=url,
-                page_timeout=timeout * 1000,  # Convert to milliseconds
-                bypass_cache=True
-            )
-            return result.markdown
+        
+        # Wrap entire crawl in asyncio timeout to prevent hanging
+        async def _fetch():
+            async with AsyncWebCrawler(
+                browser_type="chromium",
+                headless=True,
+                verbose=False
+            ) as crawler:
+                result = await crawler.arun(url=url, bypass_cache=True)
+                return result.markdown
+        
+        # Force timeout at application level
+        return await asyncio.wait_for(_fetch(), timeout=timeout)
+        
+    except asyncio.TimeoutError:
+        print(f"  Timeout ({timeout}s) fetching {url[:60]}...")
+        return None
     except Exception as e:
         # Show shorter error message
         error_msg = str(e)[:100]
-        print(f"  Error fetching {url}: {error_msg}")
+        print(f"  Error fetching {url[:60]}...: {error_msg}")
         return None

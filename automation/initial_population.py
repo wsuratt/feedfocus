@@ -132,7 +132,7 @@ if __name__ == "__main__":
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else None
     
     asyncio.run(populate_popular_topics(
-        batch_size=3,  # Reduced to 3 to avoid overwhelming t3.small
+        batch_size=2,  # Reduced to 2 for t3.small stability
         topics_limit=limit,
         resume=True
     ))
