@@ -48,10 +48,18 @@ async def populate_popular_topics(batch_size: int = 10, topics_limit: int = None
     
     if checkpoint:
         completed_topics = {r['topic'] for r in checkpoint['successful']}
-        topics_to_process = [t for t in POPULAR_TOPICS if t not in completed_topics]
+        
+        # Apply topics_limit when resuming
+        if topics_limit and topics_limit <= 30:
+            all_topics = get_core_topics(topics_limit)
+        else:
+            all_topics = POPULAR_TOPICS[:topics_limit] if topics_limit else POPULAR_TOPICS
+        
+        topics_to_process = [t for t in all_topics if t not in completed_topics]
         
         print(f"📁 Resuming from checkpoint")
         print(f"   Completed: {len(completed_topics)}")
+        print(f"   Total limit: {len(all_topics)}")
         print(f"   Remaining: {len(topics_to_process)}")
         
         results = checkpoint
