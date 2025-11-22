@@ -123,15 +123,20 @@ async def process_topic(user_topic: str) -> dict:
     
     try:
         # 1. Generate search queries for this topic
+        phase_start = datetime.now()
         print(f"  1/4 Generating search queries...")
         queries = generate_search_queries(user_topic)
-        print(f"  Generated {len(queries)} queries:")
+        phase_time = (datetime.now() - phase_start).total_seconds()
+        print(f"  Generated {len(queries)} queries (took {phase_time:.1f}s):")
         for q in queries:
             print(f"    - {q}")
         
         # 2. Discover sources using ground truth discovery logic
+        phase_start = datetime.now()
         print(f"  2/4 Discovering sources...")
         sources = await discover_sources_with_queries(queries, max_results=50)
+        phase_time = (datetime.now() - phase_start).total_seconds()
+        print(f"  Discovery phase completed in {phase_time:.1f}s")
         
         if not sources:
             print(f"  ⚠️  No sources found")
@@ -154,14 +159,20 @@ async def process_topic(user_topic: str) -> dict:
         print(f"    [DEBUG] Quality range: {top_sources[0]['quality_score']:.0f} (best) to {top_sources[-1]['quality_score']:.0f} (worst)")
         
         # 3. Extract insights
+        phase_start = datetime.now()
         print(f"  3/4 Extracting insights from {len(urls)} sources...")
         
         extraction_results = []
         successful = 0
         failed = 0
         
-        for url in urls:
+        for idx, url in enumerate(urls, 1):
             try:
+                # Progress update every 5 URLs
+                if idx % 5 == 0:
+                    elapsed = (datetime.now() - phase_start).total_seconds()
+                    print(f"    Progress: {idx}/{len(urls)} URLs processed ({elapsed:.1f}s elapsed)...")
+                
                 result = await extract_from_url(url, topic=user_topic)  # Pass topic for training logging
                 if result and result.get('status') == 'success':
                     extraction_results.append(result)
@@ -175,8 +186,9 @@ async def process_topic(user_topic: str) -> dict:
                 failed += 1
                 print(f"    ✗ {url[:60]}... - {str(e)[:50]}")
         
+        phase_time = (datetime.now() - phase_start).total_seconds()
         success_rate = (successful / len(urls) * 100) if urls else 0
-        print(f"    [DEBUG] Extraction: {successful} succeeded, {failed} failed ({success_rate:.0f}% success rate)")
+        print(f"    [DEBUG] Extraction: {successful} succeeded, {failed} failed ({success_rate:.0f}% success rate, {phase_time:.1f}s total)")
         
         # 4. Import to vector DB
         print(f"  4/4 Importing to vector DB...")

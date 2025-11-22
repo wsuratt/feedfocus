@@ -297,17 +297,27 @@ async def discover_sources_with_queries(queries: list, max_results: int = 50) ->
     print(f"  Other domains: {sum(1 for c in candidates if not c['is_preferred_domain'])}")
     
     # Preview sources
-    print(f"Previewing quality scores...\n")
+    total_to_preview = min(len(candidates), max_results)
+    print(f"Previewing quality scores for {total_to_preview} sources...")
+    print(f"  (This may take 2-5 minutes for large batches)\n")
     
     previewed = []
-    for candidate in candidates[:max_results]:
+    for idx, candidate in enumerate(candidates[:max_results], 1):
         try:
+            # Progress update every 10 sources
+            if idx % 10 == 0 or idx == 1:
+                print(f"  Progress: {idx}/{total_to_preview} sources previewed...")
+            
             preview = await preview_source(candidate)
             if preview.get('quality_score', 0) > 0:
                 previewed.append(preview)
         except Exception as e:
-            # Silently skip failed previews
+            # Log failures for debugging
+            if idx % 10 == 0:
+                print(f"  (Skipped {sum(1 for _ in range(max(0, idx-10), idx) if True)} failed sources)")
             pass
+    
+    print(f"✓ Completed preview: {len(previewed)} quality sources found\n")
     
     # Sort by quality score
     previewed.sort(key=lambda x: x.get('quality_score', 0), reverse=True)

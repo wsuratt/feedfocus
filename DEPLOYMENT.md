@@ -70,7 +70,7 @@ sudo ufw --force enable
 
 ```bash
 # Generate SSH key for GitHub
-ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/id_ed25519 -N ""
+ssh-keygen -t ed25519 -C "wsuratt@comcast.net" -f ~/.ssh/id_ed25519 -N ""
 cat ~/.ssh/id_ed25519.pub
 # Copy and add to GitHub Settings → SSH Keys
 
