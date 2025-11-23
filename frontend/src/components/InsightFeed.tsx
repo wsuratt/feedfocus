@@ -28,9 +28,9 @@ interface Interest {
 
 export function InsightFeed() {
   const [sources, setSources] = useState<SourceCard[]>([]);
-  const [loading, setLoading] = useState(true);
   const [interests, setInterests] = useState<Interest[]>([]);
   const [newInterest, setNewInterest] = useState('');
+  const [loading, setLoading] = useState(true);
   const [likedInsights, setLikedInsights] = useState<Set<string>>(new Set());
   const [bookmarkedInsights, setBookmarkedInsights] = useState<Set<string>>(new Set());
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -41,7 +41,20 @@ export function InsightFeed() {
   useEffect(() => {
     loadInterests();
     loadFeed();
+    loadEngagements();
   }, []);
+
+  const loadEngagements = () => {
+    // Load liked and bookmarked insights from localStorage
+    try {
+      const liked = localStorage.getItem('likedInsights');
+      const bookmarked = localStorage.getItem('bookmarkedInsights');
+      if (liked) setLikedInsights(new Set(JSON.parse(liked)));
+      if (bookmarked) setBookmarkedInsights(new Set(JSON.parse(bookmarked)));
+    } catch (error) {
+      console.error('Failed to load engagements:', error);
+    }
+  };
 
   const loadInterests = () => {
     // Load interests from localStorage (per-user/browser)
@@ -118,43 +131,61 @@ export function InsightFeed() {
   ];
 
   const handleEngagement = async (insightId: string, action: 'like' | 'bookmark' | 'x') => {
-    // Record engagement
-    await fetch(`${API_URL}/api/feed/engage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        insight_id: insightId,
-        action
-      })
-    });
-
-    // Handle different actions
     if (action === 'x') {
-      // Remove card from view immediately
+      // Dismiss card - remove from view
       setSources(sources.filter(source => source.id !== insightId));
+      
+      // Record dismissal
+      await fetch(`${API_URL}/api/feed/engage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insight_id: insightId, action })
+      });
     } else if (action === 'like') {
       // Toggle like
       const newLiked = new Set(likedInsights);
-      if (newLiked.has(insightId)) {
+      const isLiked = newLiked.has(insightId);
+      
+      if (isLiked) {
         newLiked.delete(insightId);
       } else {
         newLiked.add(insightId);
       }
+      
       setLikedInsights(newLiked);
+      localStorage.setItem('likedInsights', JSON.stringify([...newLiked]));
+      
+      // Record engagement (or un-engagement)
+      await fetch(`${API_URL}/api/feed/engage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insight_id: insightId, action: isLiked ? 'unlike' : 'like' })
+      });
     } else if (action === 'bookmark') {
       // Toggle bookmark
       const newBookmarked = new Set(bookmarkedInsights);
-      if (newBookmarked.has(insightId)) {
+      const isBookmarked = newBookmarked.has(insightId);
+      
+      if (isBookmarked) {
         newBookmarked.delete(insightId);
       } else {
         newBookmarked.add(insightId);
       }
+      
       setBookmarkedInsights(newBookmarked);
+      localStorage.setItem('bookmarkedInsights', JSON.stringify([...newBookmarked]));
+      
+      // Record engagement (or un-engagement)
+      await fetch(`${API_URL}/api/feed/engage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insight_id: insightId, action: isBookmarked ? 'unbookmark' : 'bookmark' })
+      });
     }
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Header with Interests Management */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 py-4">
@@ -227,8 +258,8 @@ export function InsightFeed() {
             </div>
           )}
 
-          {!loading && sources.length > 0 && (
-            <p className="text-xs text-gray-500 mt-2">{sources.reduce((sum, s) => sum + s.insight_count, 0)} new insights</p>
+          {!loading && (
+            <p className="text-xs text-gray-500">{sources.length} sources • {sources.reduce((sum, s) => sum + s.insight_count, 0)} insights</p>
           )}
         </div>
       </div>
@@ -256,114 +287,124 @@ export function InsightFeed() {
         </div>
       )}
 
-      {/* Feed - Venmo Style */}
+      {/* Feed */}
       {!loading && sources.length > 0 && (
-        <div className="max-w-2xl mx-auto px-4 py-3 space-y-0 divide-y divide-gray-100">
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
           {sources.map((source, index) => (
           <motion.div
             key={source.id}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.03 }}
-            className="bg-white py-5"
+            transition={{ delay: index * 0.05 }}
+            className="bg-white border border-gray-200 rounded-xl hover:shadow-lg transition-shadow overflow-hidden"
           >
-            <div className="flex gap-3">
-              {/* Source Icon/Avatar */}
-              <div className="flex-shrink-0">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                  {source.source_domain.charAt(0).toUpperCase()}
-                </div>
+            {/* Source Header */}
+            <div className="p-5 border-b border-gray-100">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  {source.insight_count} insight{source.insight_count !== 1 ? 's' : ''}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {new Date(source.created_at).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}
+                </span>
               </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-3">
+                {source.title}
+              </h2>
+              
+              {/* Source Link */}
+              <a 
+                href={source.source_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline transition"
+              >
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                {source.source_domain}
+                <svg className="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                {/* Header */}
-                <div className="flex items-center gap-2 mb-2">
-                  <a 
-                    href={source.source_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="font-semibold text-gray-900 hover:underline text-sm"
-                  >
-                    {source.source_domain}
-                  </a>
-                  <span className="text-gray-400 text-xs">•</span>
-                  <span className="text-gray-500 text-xs">
-                    {new Date(source.created_at).toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric' 
-                    })}
-                  </span>
-                  <button
-                    onClick={() => handleEngagement(source.id, 'x')}
-                    className="ml-auto p-1 text-gray-400 hover:text-gray-600 transition"
-                    title="Not interested"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            {/* Insights List */}
+            <div className="p-5 space-y-5">
+              {source.insights && source.insights.length > 0 ? (
+                source.insights.map((insight) => {
+                  // Split into category line and insight text
+                  const lines = insight.text.split('\n');
+                  const categoryLine = lines[0];
+                  const insightText = lines.slice(1).join('\n');
+                  
+                  return (
+                    <div key={insight.id} className="space-y-1.5">
+                      {/* Category Badge */}
+                      <div className="text-xs font-bold text-gray-500 tracking-wide">
+                        {categoryLine}
+                      </div>
+                      {/* Insight Text */}
+                      <p className="text-sm text-gray-800 leading-relaxed">
+                        {insightText || insight.text}
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-gray-500">No insights available</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <div className="flex gap-3">
+                {/* Like Button - X.com style */}
+                <button
+                  onClick={() => handleEngagement(source.id, 'like')}
+                  className="group flex items-center gap-1.5 text-gray-500 hover:text-pink-600 transition-colors"
+                  title={likedInsights.has(source.id) ? 'Unlike' : 'Like'}
+                >
+                  {likedInsights.has(source.id) ? (
+                    <svg className="w-5 h-5 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                     </svg>
-                  </button>
-                </div>
-
-                {/* Insights */}
-                <div className="space-y-4 mb-4">
-                  {source.insights && source.insights.length > 0 ? (
-                    source.insights.map((insight) => {
-                      const lines = insight.text.split('\n');
-                      const categoryLine = lines[0];
-                      const insightText = lines.slice(1).join('\n');
-                      
-                      return (
-                        <div key={insight.id} className="space-y-1">
-                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            {categoryLine}
-                          </div>
-                          <p className="text-gray-900 text-sm leading-relaxed">
-                            {insightText || insight.text}
-                          </p>
-                        </div>
-                      );
-                    })
                   ) : (
-                    <p className="text-sm text-gray-500">No insights available</p>
+                    <svg className="w-5 h-5 group-hover:text-pink-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
                   )}
-                </div>
+                </button>
 
-                {/* Action Buttons - X.com Style */}
-                <div className="flex items-center gap-6 pt-2">
-                  {/* Like Button */}
-                  <button
-                    onClick={() => handleEngagement(source.id, 'like')}
-                    className="group flex items-center gap-2 text-gray-500 hover:text-red-500 transition"
-                  >
-                    {likedInsights.has(source.id) ? (
-                      <svg className="w-5 h-5 fill-red-500" viewBox="0 0 24 24">
-                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                      </svg>
-                    )}
-                  </button>
-
-                  {/* Bookmark Button */}
-                  <button
-                    onClick={() => handleEngagement(source.id, 'bookmark')}
-                    className="group flex items-center gap-2 text-gray-500 hover:text-blue-500 transition"
-                  >
-                    {bookmarkedInsights.has(source.id) ? (
-                      <svg className="w-5 h-5 fill-blue-500" viewBox="0 0 24 24">
-                        <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 stroke-current fill-none" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
+                {/* Bookmark Button - X.com style */}
+                <button
+                  onClick={() => handleEngagement(source.id, 'bookmark')}
+                  className="group flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors"
+                  title={bookmarkedInsights.has(source.id) ? 'Remove bookmark' : 'Bookmark'}
+                >
+                  {bookmarkedInsights.has(source.id) ? (
+                    <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 group-hover:text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
+                    </svg>
+                  )}
+                </button>
               </div>
+              <button
+                onClick={() => handleEngagement(source.id, 'x')}
+                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"
+                title="Not interested"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
           </motion.div>
           ))}
