@@ -19,6 +19,9 @@ jobs:
         host: ${{ secrets.AWS_EC2_HOST }}
         username: ${{ secrets.AWS_EC2_USER }}
         key: ${{ secrets.AWS_EC2_KEY }}
+        port: 22
+        timeout: 60s
+        command_timeout: 30m
         script: |
           cd ~/feedfocus
           
