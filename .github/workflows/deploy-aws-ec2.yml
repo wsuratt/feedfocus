@@ -30,16 +30,30 @@ jobs:
           echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
           echo "ENABLE_POST_COLLECTION_FILTER=true" >> .env
           
-          # Build frontend
+          # Build frontend on host (avoids Docker space issues)
           cd frontend
+          
+          # Remove old dist if exists (avoids permission issues)
+          sudo rm -rf dist
+          
+          # Build as ubuntu user
           npm ci
           npm run build
+          
+          # Fix ownership
+          sudo chown -R ubuntu:ubuntu dist
           cd ..
           
-          # Rebuild and restart with Docker
-          docker-compose up -d --build
+          # Restart containers
+          sudo docker-compose restart
+          
+          # If code changed, rebuild backend only
+          if git diff HEAD@{1} --name-only | grep -E 'backend/|automation/|requirements.txt|Dockerfile'; then
+            echo "Code changes detected, rebuilding backend..."
+            sudo docker-compose up -d --build backend
+          fi
           
           # Check status
-          docker-compose ps
+          sudo docker-compose ps
           
           echo "✅ Deployment complete!"

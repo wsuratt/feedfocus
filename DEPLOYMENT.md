@@ -282,3 +282,16 @@ See .github/workflows/deploy-aws-ecs.yml
 ---
 
 **Ready to deploy!** Follow the Quick Start above.
+
+
+# 1. Build (you just ran this)
+sudo docker-compose build --no-cache
+
+# 2. Start containers
+sudo docker-compose up -d
+
+# 3. Verify they're running
+sudo docker-compose ps
+
+# 4. Check logs if needed
+sudo docker-compose logs -f
