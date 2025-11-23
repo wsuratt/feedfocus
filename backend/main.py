@@ -317,17 +317,21 @@ async def delete_interest(interest_id: int):
     return {"status": "deleted"}
 
 @app.get("/api/feed", response_model=List[SourceCard])
-async def get_feed(limit: int = 20):
-    """Get personalized feed from vector DB, grouped by source"""
+async def get_feed(limit: int = 20, interests: str = ""):
+    """Get personalized feed from vector DB, grouped by source
+    
+    Args:
+        limit: Max number of source cards to return
+        interests: Comma-separated list of interest topics (from client localStorage)
+    """
     from collections import defaultdict
     
-    # Load user interests
+    # Parse interests from query parameter (sent by frontend)
+    interest_list = [i.strip() for i in interests.split(",") if i.strip()] if interests else []
+    
+    # Get dismissed insight IDs (only 'x' action removes from feed)
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT topic FROM user_interests")
-    interests = [row["topic"] for row in cursor.fetchall()]
-
-    # Get dismissed insight IDs (only 'x' action removes from feed)
     cursor.execute(
         """
         SELECT DISTINCT insight_id
@@ -339,9 +343,9 @@ async def get_feed(limit: int = 20):
     conn.close()
 
     # Build semantic query from interests
-    query = " ".join(interests) if interests else "insights"
+    query = " ".join(interest_list) if interest_list else "insights"
     
-    print(f"[DEBUG] Interests: {interests}")
+    print(f"[DEBUG] Interests: {interest_list}")
     print(f"[DEBUG] Query: {query}")
 
     # Fetch more results since we'll group them

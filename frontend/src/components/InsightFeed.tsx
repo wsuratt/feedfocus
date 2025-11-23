@@ -42,20 +42,27 @@ export function InsightFeed() {
     loadFeed();
   }, []);
 
-  const loadInterests = async () => {
+  const loadInterests = () => {
+    // Load interests from localStorage (per-user/browser)
     try {
-      const response = await fetch(`${API_URL}/api/interests`);
-      const data = await response.json();
+      const stored = localStorage.getItem('userInterests');
+      const data = stored ? JSON.parse(stored) : [];
       setInterests(data);
       setShowSuggestions(data.length === 0);
     } catch (error) {
       console.error('Failed to load interests:', error);
+      setInterests([]);
     }
   };
 
   const loadFeed = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/feed?limit=50`);
+      // Get interests from localStorage and send to backend
+      const stored = localStorage.getItem('userInterests');
+      const userInterests = stored ? JSON.parse(stored) : [];
+      const topics = userInterests.map((i: any) => i.topic).join(',');
+      
+      const response = await fetch(`${API_URL}/api/feed?limit=50&interests=${encodeURIComponent(topics)}`);
       const data = await response.json();
       setSources(data);
     } catch (error) {
@@ -69,14 +76,18 @@ export function InsightFeed() {
     if (!newInterest.trim()) return;
 
     try {
-      await fetch(`${API_URL}/api/interests`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: newInterest })
-      });
+      // Add to localStorage instead of backend
+      const newInterestObj = {
+        id: Date.now(), // Use timestamp as ID
+        topic: newInterest,
+        created_at: new Date().toISOString()
+      };
+      
+      const updatedInterests = [...interests, newInterestObj];
+      localStorage.setItem('userInterests', JSON.stringify(updatedInterests));
       
       setNewInterest('');
-      await loadInterests();
+      loadInterests();
       await loadFeed(); // Refresh feed with new interest
     } catch (error) {
       console.error('Failed to add interest:', error);
@@ -85,10 +96,11 @@ export function InsightFeed() {
 
   const deleteInterest = async (id: number) => {
     try {
-      await fetch(`${API_URL}/api/interests/${id}`, {
-        method: 'DELETE'
-      });
-      await loadInterests();
+      // Remove from localStorage
+      const updatedInterests = interests.filter(i => i.id !== id);
+      localStorage.setItem('userInterests', JSON.stringify(updatedInterests));
+      
+      loadInterests();
       await loadFeed(); // Refresh feed
     } catch (error) {
       console.error('Failed to delete interest:', error);
