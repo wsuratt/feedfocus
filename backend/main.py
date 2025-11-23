@@ -26,7 +26,7 @@ load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
 ENABLE_POST_COLLECTION_FILTER = os.getenv('ENABLE_POST_COLLECTION_FILTER', 'true').lower() == 'true'
 print(f"🔧 Post-collection filtering: {'ENABLED' if ENABLE_POST_COLLECTION_FILTER else 'DISABLED'}")
 
-app = FastAPI(title="Insight Feed API", version="3.0.0")
+app = FastAPI(title="Feed Focus API", version="3.0.0")
 
 # CORS middleware
 app.add_middleware(
@@ -277,7 +277,7 @@ def generate_source_title(insights_text: str, domain: str) -> str:
 @app.get("/")
 async def root():
     return {
-        "message": "Insight Feed API", 
+        "message": "Feed Focus API", 
         "version": "3.0.0",
         "post_collection_filter_enabled": ENABLE_POST_COLLECTION_FILTER
     }
