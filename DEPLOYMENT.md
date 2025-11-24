@@ -296,4 +296,4 @@ sudo docker-compose ps
 # 4. Check logs if needed
 sudo docker-compose logs -f
 
-update 4
+update 5
