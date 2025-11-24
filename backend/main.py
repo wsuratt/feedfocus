@@ -248,28 +248,69 @@ def should_display_in_feed(insight_text: str, metadata: dict) -> bool:
 
 
 def generate_source_title(insights_text: str, domain: str) -> str:
-    """Generate a specific title from insight content"""
-    
-    # Extract capitalized proper nouns (companies, people, products)
+    """Generate a headline-style title from insight content"""
     import re
-    proper_nouns = re.findall(r'(?<!^)(?<=[\s,])([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)', insights_text)
     
-    # Deduplicate and take first 2
-    unique_nouns = []
-    seen = set()
-    for noun in proper_nouns:
-        if noun.lower() not in seen and len(unique_nouns) < 2:
-            unique_nouns.append(noun)
-            seen.add(noun.lower())
+    # Clean the text - remove category labels
+    text = insights_text
+    for label in ['💡 CASE STUDY', '🔥 COUNTERINTUITIVE', '📊 PLAYBOOK', '⚡ EARLY SIGNAL', 
+                  '💡 KEY INSIGHT', '🔥 SURPRISING', '⚡ TIMING', '💡 INSIGHT']:
+        text = text.replace(label, '')
     
-    if unique_nouns:
-        return f"{', '.join(unique_nouns)} Insights"
+    # Split into lines/sentences
+    lines = re.split(r'[→•\n]', text)
     
-    # Extract domain name as fallback
+    # Find first substantial content
+    for line in lines:
+        line = line.strip()
+        if len(line) < 30:  # Too short
+            continue
+        if line.startswith('http'):  # Skip URLs
+            continue
+            
+        # Extract key phrases with action words
+        # Look for patterns like "X is doing Y", "X shows Y", "Study finds X"
+        patterns = [
+            r'([A-Z][a-zA-Z\s&]+(?:company|companies|startup|startups|firm|firms)?)\s+(is|are|shows?|finds?|reveals?|announces?|launches?|reports?)\s+(.+?)(?:\.|,|$)',
+            r'(Study|Research|Report|Analysis|Data)\s+(finds?|shows?|reveals?)\s+(.+?)(?:\.|,|$)',
+            r'([A-Z][a-zA-Z\s&]+)\s+(hits?|reaches?|exceeds?|surpasses?|grows?|increases?|decreases?)\s+(.+?)(?:\.|,|$)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                subject = match.group(1).strip()
+                verb = match.group(2).strip()
+                object_part = match.group(3).strip()[:50]  # Limit object length
+                return f"{subject} {verb.capitalize()} {object_part}".rstrip('.')
+        
+        # If no pattern matches, create a title from first meaningful phrase
+        # Remove common prefixes
+        line = re.sub(r'^(According to|Based on|In a|The|A)\s+', '', line, flags=re.IGNORECASE)
+        
+        # Take first clause before colon, dash, or semicolon
+        parts = re.split(r'[:\-;]', line)
+        if parts:
+            title = parts[0].strip()
+            # Limit length
+            if len(title) > 70:
+                title = title[:67] + '...'
+            # Ensure starts with capital
+            if title and title[0].islower():
+                title = title[0].upper() + title[1:]
+            return title
+    
+    # Fallback: Extract key nouns and create title
+    proper_nouns = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', insights_text)
+    unique = list(dict.fromkeys(proper_nouns))[:2]  # Deduplicate, take first 2
+    
+    if unique:
+        return f"{' and '.join(unique)} Insights"
+    
+    # Final fallback
     domain_parts = domain.replace('www.', '').split('.')
     domain_name = domain_parts[0].title()
-    
-    return f"{domain_name} Insights"
+    return f"{domain_name} Analysis"
 
 
 # API Endpoints
