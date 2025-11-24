@@ -248,69 +248,40 @@ def should_display_in_feed(insight_text: str, metadata: dict) -> bool:
 
 
 def generate_source_title(insights_text: str, domain: str) -> str:
-    """Generate a headline-style title from insight content"""
+    """Fast, reliable title generation for Render deployment"""
     import re
     
-    # Clean the text - remove category labels
+    # Remove labels
     text = insights_text
-    for label in ['💡 CASE STUDY', '🔥 COUNTERINTUITIVE', '📊 PLAYBOOK', '⚡ EARLY SIGNAL', 
+    for label in ['💡 CASE STUDY', '🔉 COUNTERINTUITIVE', '📊 PLAYBOOK', '⚡ EARLY SIGNAL',
                   '💡 KEY INSIGHT', '🔥 SURPRISING', '⚡ TIMING', '💡 INSIGHT']:
-        text = text.replace(label, '')
+        text = text.replace(label, '').strip()
     
-    # Split into lines/sentences
-    lines = re.split(r'[→•\n]', text)
+    # Get first complete sentence
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    first_sentence = sentences[0] if sentences else text
     
-    # Find first substantial content
-    for line in lines:
-        line = line.strip()
-        if len(line) < 30:  # Too short
-            continue
-        if line.startswith('http'):  # Skip URLs
-            continue
-            
-        # Extract key phrases with action words
-        # Look for patterns like "X is doing Y", "X shows Y", "Study finds X"
-        patterns = [
-            r'([A-Z][a-zA-Z\s&]+(?:company|companies|startup|startups|firm|firms)?)\s+(is|are|shows?|finds?|reveals?|announces?|launches?|reports?)\s+(.+?)(?:\.|,|$)',
-            r'(Study|Research|Report|Analysis|Data)\s+(finds?|shows?|reveals?)\s+(.+?)(?:\.|,|$)',
-            r'([A-Z][a-zA-Z\s&]+)\s+(hits?|reaches?|exceeds?|surpasses?|grows?|increases?|decreases?)\s+(.+?)(?:\.|,|$)',
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, line, re.IGNORECASE)
+    # Remove common prefixes that don't add value
+    first_sentence = re.sub(r'^(According to|Based on|In a|The study shows|Research finds)\s+', 
+                           '', first_sentence, flags=re.IGNORECASE)
+    
+    # Smart truncation at natural break points
+    if len(first_sentence) > 80:
+        # Try to break at: comma, dash, "that", "which", "because"
+        for pattern in [r'^(.{30,80}),\s', r'^(.{30,80})\s-\s', r'^(.{30,80})\s(?:that|which|because)\s']:
+            match = re.search(pattern, first_sentence)
             if match:
-                subject = match.group(1).strip()
-                verb = match.group(2).strip()
-                object_part = match.group(3).strip()[:50]  # Limit object length
-                return f"{subject} {verb.capitalize()} {object_part}".rstrip('.')
-        
-        # If no pattern matches, create a title from first meaningful phrase
-        # Remove common prefixes
-        line = re.sub(r'^(According to|Based on|In a|The|A)\s+', '', line, flags=re.IGNORECASE)
-        
-        # Take first clause before colon, dash, or semicolon
-        parts = re.split(r'[:\-;]', line)
-        if parts:
-            title = parts[0].strip()
-            # Limit length
-            if len(title) > 70:
-                title = title[:67] + '...'
-            # Ensure starts with capital
-            if title and title[0].islower():
-                title = title[0].upper() + title[1:]
-            return title
+                first_sentence = match.group(1)
+                break
+        else:
+            # Just truncate at last complete word
+            first_sentence = first_sentence[:77].rsplit(' ', 1)[0] + '...'
     
-    # Fallback: Extract key nouns and create title
-    proper_nouns = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', insights_text)
-    unique = list(dict.fromkeys(proper_nouns))[:2]  # Deduplicate, take first 2
+    # Capitalize first letter if needed
+    if first_sentence and first_sentence[0].islower():
+        first_sentence = first_sentence[0].upper() + first_sentence[1:]
     
-    if unique:
-        return f"{' and '.join(unique)} Insights"
-    
-    # Final fallback
-    domain_parts = domain.replace('www.', '').split('.')
-    domain_name = domain_parts[0].title()
-    return f"{domain_name} Analysis"
+    return first_sentence.strip()
 
 
 # API Endpoints
