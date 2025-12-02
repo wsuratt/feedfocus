@@ -176,16 +176,13 @@ def migrate_chromadb_insights():
         """, (topic,))
         row = cursor.fetchone()
         
-        topic_id = str(uuid.uuid4())
         cursor.execute("""
             INSERT OR IGNORE INTO topics (
-                id, name, insight_count, avg_quality_score, updated_at
-            ) VALUES (?, ?, ?, ?, ?)
+                topic, insight_count, updated_at
+            ) VALUES (?, ?, ?)
         """, (
-            topic_id,
             topic,
             row[0],  # count
-            row[1] or 0.5,  # avg_quality_score
             datetime.now().isoformat()
         ))
     
