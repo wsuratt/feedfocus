@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS insights (
     
     -- Legacy reference (for migration)
     legacy_insight_id INTEGER,  -- Reference to insights_v2.id
-    legacy_agent_id INTEGER     -- Reference to agents.id
+    legacy_agent_id INTEGER,    -- Reference to agents.id
+    chroma_id TEXT              -- ChromaDB ID (for dedup)
 );
 
 CREATE INDEX IF NOT EXISTS idx_insights_topic ON insights(topic);
@@ -28,6 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_insights_quality_score ON insights(quality_score)
 CREATE INDEX IF NOT EXISTS idx_insights_engagement_score ON insights(engagement_score);
 CREATE INDEX IF NOT EXISTS idx_insights_archived ON insights(is_archived);
 CREATE INDEX IF NOT EXISTS idx_insights_legacy ON insights(legacy_insight_id);
+CREATE INDEX IF NOT EXISTS idx_insights_chroma ON insights(chroma_id);
 
 -- ============================================================================
 -- 2. USER TOPICS (What topics users follow)
