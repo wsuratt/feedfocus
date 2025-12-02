@@ -203,12 +203,13 @@ def migrate_chromadb_insights():
         for interest in old_interests:
             user_id = 'default'  # Single user for now
             topic = interest['topic']
+            created_at = interest['created_at'] if 'created_at' in interest.keys() else datetime.now().isoformat()
             
             cursor.execute("""
                 INSERT OR IGNORE INTO user_topics (
                     user_id, topic, followed_at
                 ) VALUES (?, ?, ?)
-            """, (user_id, topic, interest.get('created_at', datetime.now().isoformat())))
+            """, (user_id, topic, created_at))
         
         conn.commit()
         print(f"✅ Migrated {len(old_interests)} user topic follows")
