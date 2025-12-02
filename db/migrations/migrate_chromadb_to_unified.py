@@ -184,8 +184,8 @@ def migrate_chromadb_insights():
         """, (
             topic_id,
             topic,
-            row['count'],
-            row['avg_quality_score'] or 0.5,
+            row[0],  # count
+            row[1] or 0.5,  # avg_quality_score
             datetime.now().isoformat()
         ))
     
