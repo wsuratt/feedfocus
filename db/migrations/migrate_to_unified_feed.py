@@ -186,15 +186,33 @@ def migrate_engagement(conn):
         print("⚠️  No insight_engagement table found, skipping...")
         return
     
-    cursor.execute("""
-        SELECT 
-            id,
-            user_id,
-            insight_id,
-            action,
-            created_at
-        FROM insight_engagement
-    """)
+    # Check what columns exist in the old table
+    cursor.execute("PRAGMA table_info(insight_engagement)")
+    columns = [row[1] for row in cursor.fetchall()]
+    has_created_at = 'created_at' in columns
+    
+    # Build query based on available columns
+    if has_created_at:
+        cursor.execute("""
+            SELECT 
+                id,
+                user_id,
+                insight_id,
+                action,
+                created_at
+            FROM insight_engagement
+        """)
+    else:
+        # Use CURRENT_TIMESTAMP if created_at doesn't exist
+        cursor.execute("""
+            SELECT 
+                id,
+                user_id,
+                insight_id,
+                action,
+                CURRENT_TIMESTAMP as created_at
+            FROM insight_engagement
+        """)
     
     old_engagements = cursor.fetchall()
     print(f"Found {len(old_engagements)} engagement records")
