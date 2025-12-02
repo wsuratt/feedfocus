@@ -19,6 +19,14 @@ if PROJECT_ROOT not in sys.path:
 from automation.semantic_db import search_insights
 from automation.training_logger import log_feedback
 
+# Import unified feed service
+try:
+    from backend.services.feed_service import FeedService
+    UNIFIED_FEED_ENABLED = True
+except ImportError:
+    UNIFIED_FEED_ENABLED = False
+    print("⚠️  Unified feed service not available")
+
 # Load environment variables
 load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
 
@@ -575,6 +583,168 @@ async def get_stats():
         "queue_size": queue_size,
         "engagement": engagement
     }
+
+
+# ============================================================================
+# UNIFIED FEED ENDPOINTS (New Architecture)
+# ============================================================================
+
+@app.get("/api/feed/following")
+async def get_following_feed(
+    user_id: str = "default",
+    limit: int = 30,
+    offset: int = 0
+):
+    """
+    Get Following feed - unified stream of insights from user's followed topics
+    
+    Returns insights from all topics the user follows, ranked by personalization
+    """
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    try:
+        feed_service = FeedService()
+        insights = feed_service.generate_following_feed(user_id, limit, offset)
+        
+        return {
+            "feed_type": "following",
+            "insights": insights,
+            "count": len(insights),
+            "has_more": len(insights) == limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate feed: {str(e)}")
+
+
+@app.get("/api/feed/for-you")
+async def get_for_you_feed(
+    user_id: str = "default",
+    limit: int = 30,
+    offset: int = 0
+):
+    """
+    Get For You feed - algorithmic recommendations from ALL topics
+    
+    Returns insights from any topic, ranked by predicted engagement
+    """
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    try:
+        feed_service = FeedService()
+        insights = feed_service.generate_for_you_feed(user_id, limit, offset)
+        
+        return {
+            "feed_type": "for_you",
+            "insights": insights,
+            "count": len(insights),
+            "has_more": len(insights) == limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate feed: {str(e)}")
+
+
+class FeedEngagement(BaseModel):
+    user_id: str = "default"
+    insight_id: str
+    action: str  # 'view', 'like', 'save', 'dismiss'
+
+
+@app.post("/api/feed/engage")
+async def record_feed_engagement(engagement: FeedEngagement):
+    """
+    Record user engagement with an insight
+    
+    Actions: view, like, save, dismiss
+    """
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    # Validate action
+    valid_actions = ['view', 'like', 'save', 'dismiss']
+    if engagement.action not in valid_actions:
+        raise HTTPException(status_code=400, detail=f"Invalid action. Must be one of: {valid_actions}")
+    
+    try:
+        feed_service = FeedService()
+        feed_service.record_engagement(
+            engagement.user_id,
+            engagement.insight_id,
+            engagement.action
+        )
+        
+        return {
+            "status": "recorded",
+            "user_id": engagement.user_id,
+            "insight_id": engagement.insight_id,
+            "action": engagement.action
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to record engagement: {str(e)}")
+
+
+class TopicFollow(BaseModel):
+    user_id: str = "default"
+    topic: str
+
+
+@app.post("/api/topics/follow")
+async def follow_topic(follow: TopicFollow):
+    """Add topic to user's following list"""
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    try:
+        feed_service = FeedService()
+        feed_service.follow_topic(follow.user_id, follow.topic)
+        
+        return {
+            "status": "following",
+            "user_id": follow.user_id,
+            "topic": follow.topic
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to follow topic: {str(e)}")
+
+
+@app.delete("/api/topics/follow")
+async def unfollow_topic(follow: TopicFollow):
+    """Remove topic from user's following list"""
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    try:
+        feed_service = FeedService()
+        feed_service.unfollow_topic(follow.user_id, follow.topic)
+        
+        return {
+            "status": "unfollowed",
+            "user_id": follow.user_id,
+            "topic": follow.topic
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to unfollow topic: {str(e)}")
+
+
+@app.get("/api/topics/following")
+async def get_following_topics(user_id: str = "default"):
+    """Get list of topics user is following"""
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    try:
+        feed_service = FeedService()
+        topics = feed_service.get_user_topics(user_id)
+        
+        return {
+            "user_id": user_id,
+            "topics": topics,
+            "count": len(topics)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get topics: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
