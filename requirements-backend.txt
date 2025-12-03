@@ -1,0 +1,18 @@
+# Backend API Server Dependencies (lightweight)
+fastapi==0.109.0
+uvicorn==0.27.0
+python-jose[cryptography]==3.3.0
+python-dotenv==1.0.0
+pydantic==2.5.0
+python-multipart==0.0.6
+requests==2.31.0
+
+# Database
+sqlite-utils==3.36
+
+# Vector search (needed for semantic_db.search_insights)
+chromadb==0.4.22
+sentence-transformers==2.2.2
+
+# SLM API (needed for semantic_db evaluation)
+groq==0.4.2

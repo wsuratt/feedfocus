@@ -1,0 +1,16 @@
+# Automation Pipeline Dependencies (heavy - only for data collection scripts)
+
+# Include all backend dependencies
+-r requirements-backend.txt
+
+# Web scraping
+crawl4ai==0.3.74
+
+# AI APIs
+anthropic==0.18.1
+
+# Search
+ddgs==1.0.0
+
+# PDF processing
+PyPDF2==3.0.1
