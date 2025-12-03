@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 // Unified Feed Types
 interface UnifiedInsight {
@@ -46,8 +47,8 @@ export function UnifiedFeed() {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
+  const { user, getAccessToken, signOut } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || '';
-  const USER_ID = 'default';
   const LIMIT = 30;
 
   // Load initial feed
@@ -117,9 +118,23 @@ export function UnifiedFeed() {
         ? `/api/feed/following`
         : `/api/feed/for-you`;
       
+      // Get auth token
+      const token = await getAccessToken();
+      
       const response = await fetch(
-        `${API_URL}${endpoint}?user_id=${USER_ID}&limit=${LIMIT}&offset=${currentOffset}`
+        `${API_URL}${endpoint}?limit=${LIMIT}&offset=${currentOffset}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data: FeedResponse = await response.json();
 
       // Filter out dismissed insights
@@ -147,11 +162,15 @@ export function UnifiedFeed() {
   const handleEngagement = async (insightId: string, action: EngagementAction) => {
     // Record with backend
     try {
+      const token = await getAccessToken();
+      
       await fetch(`${API_URL}/api/feed/engage`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          user_id: USER_ID,
           insight_id: insightId,
           action,
         }),
@@ -295,9 +314,20 @@ export function UnifiedFeed() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-4xl mx-auto px-4">
-          <h1 className="text-2xl font-bold text-gray-900 text-center py-4">
-            Feed Focus
-          </h1>
+          <div className="flex items-center justify-between py-4">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Feed Focus
+            </h1>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">{user?.email}</span>
+              <button
+                onClick={signOut}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
           
           {/* Tabs */}
           <div className="flex gap-1">

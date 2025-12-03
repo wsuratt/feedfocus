@@ -6,7 +6,7 @@ import os
 import sys
 import re
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -26,6 +26,14 @@ try:
 except ImportError:
     UNIFIED_FEED_ENABLED = False
     print("⚠️  Unified feed service not available")
+
+# Import auth middleware
+try:
+    from backend.middleware.auth import verify_token, optional_verify_token
+    AUTH_ENABLED = True
+except ImportError:
+    AUTH_ENABLED = False
+    print("⚠️  Auth middleware not available")
 
 # Load environment variables
 load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
@@ -591,12 +599,14 @@ async def get_stats():
 
 @app.get("/api/feed/following")
 async def get_following_feed(
-    user_id: str = "default",
     limit: int = 30,
-    offset: int = 0
+    offset: int = 0,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
 ):
     """
     Get Following feed - unified stream of insights from user's followed topics
+    
+    Requires authentication. User ID is extracted from JWT token.
     
     Returns insights from all topics the user follows, ranked by personalization
     """
@@ -619,12 +629,14 @@ async def get_following_feed(
 
 @app.get("/api/feed/for-you")
 async def get_for_you_feed(
-    user_id: str = "default",
     limit: int = 30,
-    offset: int = 0
+    offset: int = 0,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
 ):
     """
     Get For You feed - algorithmic recommendations from ALL topics
+    
+    Requires authentication. User ID is extracted from JWT token.
     
     Returns insights from any topic, ranked by predicted engagement
     """
@@ -646,15 +658,19 @@ async def get_for_you_feed(
 
 
 class FeedEngagement(BaseModel):
-    user_id: str = "default"
     insight_id: str
     action: str  # 'view', 'like', 'save', 'dismiss'
 
 
 @app.post("/api/feed/engage")
-async def record_feed_engagement(engagement: FeedEngagement):
+async def record_feed_engagement(
+    engagement: FeedEngagement,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
     """
     Record user engagement with an insight
+    
+    Requires authentication. User ID is extracted from JWT token.
     
     Actions: view, like, save, dismiss
     """
@@ -669,14 +685,14 @@ async def record_feed_engagement(engagement: FeedEngagement):
     try:
         feed_service = FeedService()
         feed_service.record_engagement(
-            engagement.user_id,
+            user_id,
             engagement.insight_id,
             engagement.action
         )
         
         return {
             "status": "recorded",
-            "user_id": engagement.user_id,
+            "user_id": user_id,
             "insight_id": engagement.insight_id,
             "action": engagement.action
         }
@@ -685,23 +701,29 @@ async def record_feed_engagement(engagement: FeedEngagement):
 
 
 class TopicFollow(BaseModel):
-    user_id: str = "default"
     topic: str
 
 
 @app.post("/api/topics/follow")
-async def follow_topic(follow: TopicFollow):
-    """Add topic to user's following list"""
+async def follow_topic(
+    follow: TopicFollow,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
+    """
+    Add topic to user's following list
+    
+    Requires authentication. User ID is extracted from JWT token.
+    """
     if not UNIFIED_FEED_ENABLED:
         raise HTTPException(status_code=501, detail="Unified feed not available")
     
     try:
         feed_service = FeedService()
-        feed_service.follow_topic(follow.user_id, follow.topic)
+        feed_service.follow_topic(user_id, follow.topic)
         
         return {
             "status": "following",
-            "user_id": follow.user_id,
+            "user_id": user_id,
             "topic": follow.topic
         }
     except Exception as e:
@@ -709,18 +731,25 @@ async def follow_topic(follow: TopicFollow):
 
 
 @app.delete("/api/topics/follow")
-async def unfollow_topic(follow: TopicFollow):
-    """Remove topic from user's following list"""
+async def unfollow_topic(
+    follow: TopicFollow,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
+    """
+    Remove topic from user's following list
+    
+    Requires authentication. User ID is extracted from JWT token.
+    """
     if not UNIFIED_FEED_ENABLED:
         raise HTTPException(status_code=501, detail="Unified feed not available")
     
     try:
         feed_service = FeedService()
-        feed_service.unfollow_topic(follow.user_id, follow.topic)
+        feed_service.unfollow_topic(user_id, follow.topic)
         
         return {
             "status": "unfollowed",
-            "user_id": follow.user_id,
+            "user_id": user_id,
             "topic": follow.topic
         }
     except Exception as e:
@@ -728,8 +757,14 @@ async def unfollow_topic(follow: TopicFollow):
 
 
 @app.get("/api/topics/following")
-async def get_following_topics(user_id: str = "default"):
-    """Get list of topics user is following"""
+async def get_following_topics(
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
+    """
+    Get list of topics user is following
+    
+    Requires authentication. User ID is extracted from JWT token.
+    """
     if not UNIFIED_FEED_ENABLED:
         raise HTTPException(status_code=501, detail="Unified feed not available")
     
