@@ -33,8 +33,23 @@ jobs:
           echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
           echo "ENABLE_POST_COLLECTION_FILTER=true" >> .env
           
+          # Supabase backend variables (for JWT verification)
+          echo "SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" >> .env
+          echo "SUPABASE_JWT_SECRET=${{ secrets.SUPABASE_JWT_SECRET }}" >> .env
+          echo "SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}" >> .env
+          
+          # Frontend build variables (for Docker)
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" >> .env
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
+          echo "VITE_API_URL=https://api.feed-focus.com" >> .env
+          
           # Build frontend on host (avoids Docker space issues)
           cd frontend
+          
+          # Create frontend .env for build
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" > .env
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
+          echo "VITE_API_URL=https://api.feed-focus.com" >> .env
           
           # Remove old dist if exists (avoids permission issues)
           sudo rm -rf dist
