@@ -13,6 +13,9 @@ services:
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - ENABLE_POST_COLLECTION_FILTER=true
     volumes:
       - ./insights.db:/app/insights.db
