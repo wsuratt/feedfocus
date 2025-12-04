@@ -14,6 +14,12 @@ ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_URL=$VITE_API_URL
 
+# Debug: Print to verify (remove after testing)
+RUN echo "Build args check:" && \
+    echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" && \
+    echo "VITE_API_URL=$VITE_API_URL" && \
+    echo "Has ANON_KEY=$([ -n "$VITE_SUPABASE_ANON_KEY" ] && echo 'YES' || echo 'NO')"
+
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
