@@ -3,7 +3,7 @@ fastapi==0.109.0
 uvicorn==0.27.0
 python-jose[cryptography]==3.3.0
 python-dotenv==1.0.0
-pydantic==1.10.13  # ChromaDB 0.4.0 requires pydantic<2.0
+pydantic==2.5.0
 python-multipart==0.0.6
 requests==2.31.0
 
@@ -11,9 +11,9 @@ requests==2.31.0
 sqlite-utils==3.36
 
 # Vector search (needed for semantic_db.search_insights)
-numpy<2.0.0  # Old versions need NumPy 1.x
+numpy<2.0.0  # ChromaDB needs NumPy 1.x
 huggingface-hub<0.12.0  # sentence-transformers 2.2.2 needs cached_download
-chromadb==0.4.0  # Pin to exact 0.4.0 to match existing database schema (was >=0.4.0)
+chromadb==0.4.22  # Latest stable 0.4.x, matches your original >=0.4.0
 sentence-transformers==2.2.2
 
 # SLM API (needed for semantic_db evaluation)
