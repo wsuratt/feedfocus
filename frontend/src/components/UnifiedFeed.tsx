@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -47,7 +48,8 @@ export function UnifiedFeed() {
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  const { user, getAccessToken, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { user, getAccessToken } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || '';
   const LIMIT = 30;
 
@@ -318,15 +320,13 @@ export function UnifiedFeed() {
             <h1 className="text-2xl font-bold text-gray-900">
               Feed Focus
             </h1>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">{user?.email}</span>
-              <button
-                onClick={signOut}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
-              >
-                Sign Out
-              </button>
-            </div>
+            <button
+              onClick={() => navigate('/profile')}
+              className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold hover:bg-blue-700 transition"
+              title="View Profile"
+            >
+              {user?.email?.[0].toUpperCase() || 'U'}
+            </button>
           </div>
           
           {/* Tabs */}

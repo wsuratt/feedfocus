@@ -1,10 +1,11 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { UnifiedFeed } from './components/UnifiedFeed';
+import { Profile } from './components/Profile';
 import { Login } from './components/Login';
 import './App.css';
 
-function ProtectedApp() {
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -19,10 +20,10 @@ function ProtectedApp() {
   }
 
   if (!user) {
-    return <Login />;
+    return <Navigate to="/login" replace />;
   }
 
-  return <UnifiedFeed />;
+  return <>{children}</>;
 }
 
 function App() {
@@ -30,7 +31,23 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<ProtectedApp />} />
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <UnifiedFeed />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
