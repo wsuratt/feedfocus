@@ -61,6 +61,49 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def init_database():
+    """Initialize database tables if they don't exist"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Create user_engagement table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_engagement (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            insight_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    
+    # Create user_topics table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_topics (
+            user_id TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            followed_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, topic)
+        )
+    """)
+    
+    # Create indexes for performance
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_user_engagement_user 
+        ON user_engagement(user_id, action)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_user_engagement_insight 
+        ON user_engagement(insight_id)
+    """)
+    
+    conn.commit()
+    conn.close()
+
+# Initialize database on startup
+init_database()
+
 # Pydantic models
 class Interest(BaseModel):
     topic: str
@@ -81,10 +124,6 @@ class SourceCard(BaseModel):
     created_at: str
     relevance_score: float
     topics: List[str]
-
-class EngagementAction(BaseModel):
-    insight_id: str
-    action: str  # 'like', 'x' (dismiss), 'bookmark', 'share'
 
 # Helper functions
 def generate_title(extracted_data: dict) -> str:
@@ -457,40 +496,6 @@ async def get_feed(limit: int = 20, interests: str = ""):
     print(f"[DEBUG] Grouped into {len(source_cards)} source cards")
     
     return source_cards[:limit]
-
-@app.post("/api/feed/engage")
-async def engage_with_insight(engagement: EngagementAction):
-    """
-    Record user engagement with insight
-    Updates recommendation algorithm
-    """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Record engagement as a log against the vector insight ID
-    cursor.execute(
-        """
-        INSERT INTO insight_engagement (insight_id, action, created_at, user_id)
-        VALUES (?, ?, ?, ?)
-        """,
-        (engagement.insight_id, engagement.action, datetime.now().isoformat(), 1),
-    )
-
-    conn.commit()
-    conn.close()
-    
-    # Log feedback for training data (non-blocking)
-    try:
-        log_feedback(
-            insight_id=engagement.insight_id,
-            action=engagement.action,
-            metadata={"user_id": 1}
-        )
-    except Exception:
-        # Don't fail engagement if logging fails
-        pass
-    
-    return {"status": "recorded"}
 
 # Global variable to track feed generation status
 feed_generation_status = {
