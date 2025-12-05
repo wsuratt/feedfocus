@@ -781,6 +781,62 @@ async def get_following_topics(
         raise HTTPException(status_code=500, detail=f"Failed to get topics: {str(e)}")
 
 
+@app.get("/api/insights/liked")
+async def get_liked_insights(
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
+    """
+    Get user's liked insights
+    
+    Requires authentication. User ID is extracted from JWT token.
+    """
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    try:
+        feed_service = FeedService()
+        insights = feed_service.get_user_liked_insights(user_id, limit, offset)
+        
+        return {
+            "user_id": user_id,
+            "insights": insights,
+            "count": len(insights),
+            "has_more": len(insights) == limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get liked insights: {str(e)}")
+
+
+@app.get("/api/insights/bookmarked")
+async def get_bookmarked_insights(
+    limit: int = 50,
+    offset: int = 0,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
+    """
+    Get user's bookmarked (saved) insights
+    
+    Requires authentication. User ID is extracted from JWT token.
+    """
+    if not UNIFIED_FEED_ENABLED:
+        raise HTTPException(status_code=501, detail="Unified feed not available")
+    
+    try:
+        feed_service = FeedService()
+        insights = feed_service.get_user_bookmarked_insights(user_id, limit, offset)
+        
+        return {
+            "user_id": user_id,
+            "insights": insights,
+            "count": len(insights),
+            "has_more": len(insights) == limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get bookmarked insights: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

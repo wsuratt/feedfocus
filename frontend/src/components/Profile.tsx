@@ -66,22 +66,35 @@ export function Profile() {
     }
   };
 
-  const loadLocalEngagements = () => {
+  const loadLocalEngagements = async () => {
     try {
-      const liked = localStorage.getItem('likedInsights');
-      const saved = localStorage.getItem('savedInsights');
+      const token = await getAccessToken();
+      if (!token) return;
       
-      // For now, just show counts - in production, you'd fetch full insight details from backend
-      if (liked) {
-        // TODO: Fetch full insight details from backend using these IDs
-        // const likedIds = JSON.parse(liked);
-        setLikedInsights([]);
+      // Fetch liked insights
+      const likedResponse = await fetch(`${API_URL}/api/insights/liked`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (likedResponse.ok) {
+        const likedData = await likedResponse.json();
+        setLikedInsights(likedData.insights || []);
       }
       
-      if (saved) {
-        // TODO: Fetch full insight details from backend using these IDs
-        // const savedIds = JSON.parse(saved);
-        setSavedInsights([]);
+      // Fetch bookmarked insights
+      const bookmarkedResponse = await fetch(`${API_URL}/api/insights/bookmarked`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (bookmarkedResponse.ok) {
+        const bookmarkedData = await bookmarkedResponse.json();
+        setSavedInsights(bookmarkedData.insights || []);
       }
     } catch (error) {
       console.error('Failed to load engagements:', error);

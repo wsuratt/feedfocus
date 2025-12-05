@@ -43,6 +43,7 @@ export function UnifiedFeed() {
   const [likedInsights, setLikedInsights] = useState<Set<string>>(new Set());
   const [savedInsights, setSavedInsights] = useState<Set<string>>(new Set());
   const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
+  const [followedTopics, setFollowedTopics] = useState<Set<string>>(new Set());
 
   // Infinite scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -56,6 +57,7 @@ export function UnifiedFeed() {
   // Load initial feed
   useEffect(() => {
     loadEngagements();
+    loadFollowedTopics();
     loadFeed(true);
   }, [activeTab]);
 
@@ -102,6 +104,62 @@ export function UnifiedFeed() {
       localStorage.setItem('dismissedInsights', JSON.stringify([...dismissedInsights]));
     } catch (error) {
       console.error('Failed to save engagements:', error);
+    }
+  };
+
+  // Load followed topics from API
+  const loadFollowedTopics = async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/topics/following`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFollowedTopics(new Set(data.topics || []));
+      }
+    } catch (error) {
+      console.error('Failed to load followed topics:', error);
+    }
+  };
+
+  // Follow/unfollow a topic
+  const handleFollowTopic = async (topic: string) => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const isFollowing = followedTopics.has(topic);
+      const method = isFollowing ? 'DELETE' : 'POST';
+
+      const response = await fetch(`${API_URL}/api/topics/follow`, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ topic }),
+      });
+
+      if (response.ok) {
+        setFollowedTopics(prev => {
+          const newSet = new Set(prev);
+          if (isFollowing) {
+            newSet.delete(topic);
+          } else {
+            newSet.add(topic);
+          }
+          return newSet;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to follow/unfollow topic:', error);
     }
   };
 
@@ -232,11 +290,24 @@ export function UnifiedFeed() {
       transition={{ delay: index * 0.03 }}
       className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow"
     >
-      {/* Topic Tag */}
-      <div className="mb-3">
+      {/* Topic Tag with Follow Button */}
+      <div className="mb-3 flex items-center justify-between">
         <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
           #{insight.topic}
         </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleFollowTopic(insight.topic);
+          }}
+          className={`px-3 py-1 text-xs font-medium rounded-full transition ${
+            followedTopics.has(insight.topic)
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          {followedTopics.has(insight.topic) ? 'Following' : 'Follow Topic'}
+        </button>
       </div>
 
       {/* Category Badge */}

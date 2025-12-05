@@ -232,6 +232,50 @@ class FeedService:
         
         return topics
     
+    def get_user_liked_insights(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Dict]:
+        """Get user's liked insights"""
+        conn = self.get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                i.id, i.topic, i.category, i.text, i.source_url, i.source_domain,
+                i.quality_score, i.engagement_score, i.created_at,
+                ue.created_at as liked_at
+            FROM insights i
+            INNER JOIN user_engagement ue ON i.id = ue.insight_id
+            WHERE ue.user_id = ? AND ue.action = 'like'
+            ORDER BY ue.created_at DESC
+            LIMIT ? OFFSET ?
+        """, (user_id, limit, offset))
+        
+        insights = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return insights
+    
+    def get_user_bookmarked_insights(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Dict]:
+        """Get user's bookmarked (saved) insights"""
+        conn = self.get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                i.id, i.topic, i.category, i.text, i.source_url, i.source_domain,
+                i.quality_score, i.engagement_score, i.created_at,
+                ue.created_at as bookmarked_at
+            FROM insights i
+            INNER JOIN user_engagement ue ON i.id = ue.insight_id
+            WHERE ue.user_id = ? AND ue.action = 'save'
+            ORDER BY ue.created_at DESC
+            LIMIT ? OFFSET ?
+        """, (user_id, limit, offset))
+        
+        insights = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return insights
+    
     def _get_seen_insight_ids(self, user_id: str, cursor) -> Set[str]:
         """Get set of insight IDs user has already seen"""
         cursor.execute("""
