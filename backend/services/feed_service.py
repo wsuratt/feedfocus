@@ -178,12 +178,34 @@ class FeedService:
         conn = self.get_db_connection()
         cursor = conn.cursor()
         
-        # Insert engagement record
-        engagement_id = str(uuid.uuid4())
-        cursor.execute("""
-            INSERT INTO user_engagement (id, user_id, insight_id, action, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (engagement_id, user_id, insight_id, action, datetime.now().isoformat()))
+        # For like/save actions, check if already exists and toggle
+        if action in ['like', 'save']:
+            cursor.execute("""
+                SELECT id FROM user_engagement 
+                WHERE user_id = ? AND insight_id = ? AND action = ?
+            """, (user_id, insight_id, action))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Already exists, remove it (toggle off)
+                cursor.execute("""
+                    DELETE FROM user_engagement 
+                    WHERE user_id = ? AND insight_id = ? AND action = ?
+                """, (user_id, insight_id, action))
+            else:
+                # Doesn't exist, add it (toggle on)
+                engagement_id = str(uuid.uuid4())
+                cursor.execute("""
+                    INSERT INTO user_engagement (id, user_id, insight_id, action, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (engagement_id, user_id, insight_id, action, datetime.now().isoformat()))
+        else:
+            # For view/dismiss, just insert
+            engagement_id = str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO user_engagement (id, user_id, insight_id, action, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (engagement_id, user_id, insight_id, action, datetime.now().isoformat()))
         
         conn.commit()
         
