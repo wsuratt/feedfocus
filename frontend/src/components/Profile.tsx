@@ -21,9 +21,11 @@ export function Profile() {
   const API_URL = import.meta.env.VITE_API_URL || '';
 
   const [activeTab, setActiveTab] = useState<'likes' | 'bookmarks' | 'topics'>('likes');
-  const [followedTopics, setFollowedTopics] = useState<string[]>([]);
+  const [followedTopics, setFollowedTopics] = useState<Set<string>>(new Set());
   const [likedInsights, setLikedInsights] = useState<UnifiedInsight[]>([]);
   const [savedInsights, setSavedInsights] = useState<UnifiedInsight[]>([]);
+  const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
+  const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function Profile() {
 
       if (response.ok) {
         const data = await response.json();
-        setFollowedTopics(data.topics || []);
+        setFollowedTopics(new Set(data.topics || []));
       }
     } catch (error) {
       console.error('Failed to load followed topics:', error);
@@ -81,7 +83,9 @@ export function Profile() {
       
       if (likedResponse.ok) {
         const likedData = await likedResponse.json();
-        setLikedInsights(likedData.insights || []);
+        const insights = likedData.insights || [];
+        setLikedInsights(insights);
+        setLikedSet(new Set(insights.map((i: UnifiedInsight) => i.id)));
       }
       
       // Fetch bookmarked insights
@@ -94,7 +98,9 @@ export function Profile() {
       
       if (bookmarkedResponse.ok) {
         const bookmarkedData = await bookmarkedResponse.json();
-        setSavedInsights(bookmarkedData.insights || []);
+        const insights = bookmarkedData.insights || [];
+        setSavedInsights(insights);
+        setSavedSet(new Set(insights.map((i: UnifiedInsight) => i.id)));
       }
     } catch (error) {
       console.error('Failed to load engagements:', error);
@@ -116,11 +122,106 @@ export function Profile() {
       });
 
       if (response.ok) {
-        setFollowedTopics(prev => prev.filter(t => t !== topic));
+        setFollowedTopics(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(topic);
+          return newSet;
+        });
       }
     } catch (error) {
       console.error('Failed to unfollow topic:', error);
     }
+  };
+
+  const handleFollowTopic = async (topic: string) => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const isFollowing = followedTopics.has(topic);
+      const method = isFollowing ? 'DELETE' : 'POST';
+
+      const response = await fetch(`${API_URL}/api/topics/follow`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ topic }),
+      });
+
+      if (response.ok) {
+        setFollowedTopics(prev => {
+          const newSet = new Set(prev);
+          if (isFollowing) {
+            newSet.delete(topic);
+          } else {
+            newSet.add(topic);
+          }
+          return newSet;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to follow/unfollow topic:', error);
+    }
+  };
+
+  const handleEngagement = async (insightId: string, action: 'like' | 'save') => {
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      await fetch(`${API_URL}/api/feed/engage`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          insight_id: insightId,
+          action,
+        }),
+      });
+
+      // Update local state
+      if (action === 'like') {
+        setLikedSet(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(insightId)) {
+            newSet.delete(insightId);
+            setLikedInsights(curr => curr.filter(i => i.id !== insightId));
+          } else {
+            newSet.add(insightId);
+          }
+          return newSet;
+        });
+      } else if (action === 'save') {
+        setSavedSet(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(insightId)) {
+            newSet.delete(insightId);
+            setSavedInsights(curr => curr.filter(i => i.id !== insightId));
+          } else {
+            newSet.add(insightId);
+          }
+          return newSet;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to record engagement:', error);
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    const colors: Record<string, string> = {
+      'CASE STUDY': 'bg-purple-100 text-purple-700',
+      'PLAYBOOK': 'bg-blue-100 text-blue-700',
+      'TREND': 'bg-green-100 text-green-700',
+      'COUNTERINTUITIVE': 'bg-orange-100 text-orange-700',
+      'OPPORTUNITY': 'bg-yellow-100 text-yellow-700',
+      'INSIGHT': 'bg-gray-100 text-gray-700',
+    };
+    return colors[category] || 'bg-gray-100 text-gray-700';
   };
 
   const handleSignOut = async () => {
@@ -175,7 +276,7 @@ export function Profile() {
             <div>
               <h2 className="text-xl font-bold text-gray-900">{user?.email}</h2>
               <p className="text-sm text-gray-600 mt-1">
-                {followedTopics.length} topics following
+                {followedTopics.size} topics following
               </p>
             </div>
           </div>
@@ -241,21 +342,90 @@ export function Profile() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {likedInsights.map((insight) => (
+                    {likedInsights.map((insight, index) => (
                       <motion.div
                         key={insight.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="p-4 border rounded-lg hover:border-blue-300 transition cursor-pointer"
-                        onClick={() => window.open(insight.source_url, '_blank')}
+                        transition={{ delay: index * 0.03 }}
+                        className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow"
                       >
-                        <p className="text-gray-900 mb-2">{insight.text}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs">
-                            {insight.topic}
+                        {/* Topic Tag with Follow Button */}
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
+                            #{insight.topic}
                           </span>
-                          <span>•</span>
-                          <span>{insight.source_domain}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFollowTopic(insight.topic);
+                            }}
+                            className={`px-3 py-1 text-xs font-medium rounded-full transition ${
+                              followedTopics.has(insight.topic)
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {followedTopics.has(insight.topic) ? 'Following' : 'Follow Topic'}
+                          </button>
+                        </div>
+
+                        {/* Category Badge */}
+                        <div className="mb-3">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ${getCategoryColor(insight.category)}`}>
+                            {insight.category}
+                          </span>
+                        </div>
+
+                        {/* Insight Text */}
+                        <p className="text-gray-900 text-base leading-relaxed mb-4">
+                          {insight.text}
+                        </p>
+
+                        {/* Source */}
+                        <a
+                          href={insight.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 mb-4"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          {insight.source_domain}
+                        </a>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-4 pt-4 border-t border-gray-100">
+                          {/* Like Button */}
+                          <button
+                            onClick={() => handleEngagement(insight.id, 'like')}
+                            className="flex items-center gap-2 text-gray-600 hover:text-pink-600 transition"
+                          >
+                            <svg
+                              className={`w-5 h-5 ${likedSet.has(insight.id) ? 'fill-pink-600 text-pink-600' : 'fill-none'}`}
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            <span className="text-sm">{likedSet.has(insight.id) ? 'Liked' : 'Like'}</span>
+                          </button>
+
+                          {/* Save Button */}
+                          <button
+                            onClick={() => handleEngagement(insight.id, 'save')}
+                            className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition"
+                          >
+                            <svg
+                              className={`w-5 h-5 ${savedSet.has(insight.id) ? 'fill-blue-600 text-blue-600' : 'fill-none'}`}
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                            </svg>
+                            <span className="text-sm">{savedSet.has(insight.id) ? 'Saved' : 'Save'}</span>
+                          </button>
                         </div>
                       </motion.div>
                     ))}
@@ -278,21 +448,90 @@ export function Profile() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {savedInsights.map((insight) => (
+                    {savedInsights.map((insight, index) => (
                       <motion.div
                         key={insight.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="p-4 border rounded-lg hover:border-blue-300 transition cursor-pointer"
-                        onClick={() => window.open(insight.source_url, '_blank')}
+                        transition={{ delay: index * 0.03 }}
+                        className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow"
                       >
-                        <p className="text-gray-900 mb-2">{insight.text}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs">
-                            {insight.topic}
+                        {/* Topic Tag with Follow Button */}
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
+                            #{insight.topic}
                           </span>
-                          <span>•</span>
-                          <span>{insight.source_domain}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFollowTopic(insight.topic);
+                            }}
+                            className={`px-3 py-1 text-xs font-medium rounded-full transition ${
+                              followedTopics.has(insight.topic)
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {followedTopics.has(insight.topic) ? 'Following' : 'Follow Topic'}
+                          </button>
+                        </div>
+
+                        {/* Category Badge */}
+                        <div className="mb-3">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ${getCategoryColor(insight.category)}`}>
+                            {insight.category}
+                          </span>
+                        </div>
+
+                        {/* Insight Text */}
+                        <p className="text-gray-900 text-base leading-relaxed mb-4">
+                          {insight.text}
+                        </p>
+
+                        {/* Source */}
+                        <a
+                          href={insight.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 mb-4"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          {insight.source_domain}
+                        </a>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-4 pt-4 border-t border-gray-100">
+                          {/* Like Button */}
+                          <button
+                            onClick={() => handleEngagement(insight.id, 'like')}
+                            className="flex items-center gap-2 text-gray-600 hover:text-pink-600 transition"
+                          >
+                            <svg
+                              className={`w-5 h-5 ${likedSet.has(insight.id) ? 'fill-pink-600 text-pink-600' : 'fill-none'}`}
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            <span className="text-sm">{likedSet.has(insight.id) ? 'Liked' : 'Like'}</span>
+                          </button>
+
+                          {/* Save Button */}
+                          <button
+                            onClick={() => handleEngagement(insight.id, 'save')}
+                            className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition"
+                          >
+                            <svg
+                              className={`w-5 h-5 ${savedSet.has(insight.id) ? 'fill-blue-600 text-blue-600' : 'fill-none'}`}
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                            </svg>
+                            <span className="text-sm">{savedSet.has(insight.id) ? 'Saved' : 'Save'}</span>
+                          </button>
                         </div>
                       </motion.div>
                     ))}
@@ -303,7 +542,7 @@ export function Profile() {
 
             {activeTab === 'topics' && (
               <div>
-                {followedTopics.length === 0 ? (
+                {followedTopics.size === 0 ? (
                   <div className="text-center py-12">
                     <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -315,7 +554,7 @@ export function Profile() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-3">
-                    {followedTopics.map((topic) => (
+                    {Array.from(followedTopics).map((topic) => (
                       <motion.div
                         key={topic}
                         initial={{ opacity: 0, scale: 0.95 }}
