@@ -137,12 +137,12 @@ SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET')
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)) -> str:
     """
     Verify Supabase JWT token and return user_id
-    
+
     Returns:
         user_id (str): Supabase user ID from token
     """
     token = credentials.credentials
-    
+
     try:
         # Decode JWT token
         payload = jwt.decode(
@@ -151,15 +151,15 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
             algorithms=['HS256'],
             audience='authenticated'
         )
-        
+
         # Extract user ID (Supabase uses 'sub' claim)
         user_id = payload.get('sub')
-        
+
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token: no user ID")
-        
+
         return user_id
-        
+
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 ```
@@ -182,7 +182,7 @@ async def get_following_feed(
     """Get Following feed - now requires authentication"""
     feed_service = FeedService()
     insights = feed_service.generate_following_feed(user_id, limit, offset)
-    
+
     return {
         "feed_type": "following",
         "insights": insights,
@@ -308,14 +308,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
-      loading, 
-      signIn, 
-      signUp, 
+    <AuthContext.Provider value={{
+      user,
+      session,
+      loading,
+      signIn,
+      signUp,
       signOut,
-      getAccessToken 
+      getAccessToken
     }}>
       {children}
     </AuthContext.Provider>
@@ -369,7 +369,7 @@ export function Login() {
             {isSignUp ? 'Sign Up' : 'Sign In'}
           </h2>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <input
@@ -381,7 +381,7 @@ export function Login() {
               required
             />
           </div>
-          
+
           <div>
             <input
               type="password"
@@ -478,13 +478,13 @@ export function UnifiedFeed() {
     try {
       // Get auth token
       const token = await getAccessToken();
-      
-      const endpoint = activeTab === 'following' 
-        ? '/api/feed/following' 
+
+      const endpoint = activeTab === 'following'
+        ? '/api/feed/following'
         : '/api/feed/for-you';
-      
+
       const url = `${API_URL}${endpoint}?limit=${LIMIT}&offset=${reset ? 0 : offset}`;
-      
+
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,  // Add auth header
@@ -495,7 +495,7 @@ export function UnifiedFeed() {
       if (!response.ok) throw new Error('Failed to fetch feed');
 
       const data: FeedResponse = await response.json();
-      
+
       // ... rest of logic
     } catch (error) {
       console.error('Error loading feed:', error);
@@ -509,7 +509,7 @@ export function UnifiedFeed() {
   const recordEngagement = async (insightId: string, action: EngagementAction) => {
     try {
       const token = await getAccessToken();
-      
+
       await fetch(`${API_URL}/api/feed/engage`, {
         method: 'POST',
         headers: {
@@ -645,14 +645,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
-      loading, 
-      signIn, 
-      signUp, 
+    <AuthContext.Provider value={{
+      user,
+      session,
+      loading,
+      signIn,
+      signUp,
       signOut,
-      getAccessToken 
+      getAccessToken
     }}>
       {children}
     </AuthContext.Provider>
@@ -699,7 +699,7 @@ export function Login() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>
-      
+
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -708,7 +708,7 @@ export function Login() {
         autoCapitalize="none"
         keyboardType="email-address"
       />
-      
+
       <TextInput
         style={styles.input}
         placeholder="Password"
@@ -833,13 +833,13 @@ const apiClient = axios.create({
 // Add request interceptor to attach auth token
 apiClient.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
-  
+
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }
-  
+
   config.headers['Content-Type'] = 'application/json';
-  
+
   return config;
 });
 

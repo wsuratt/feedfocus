@@ -9,7 +9,7 @@ This document provides an overview of the Insight Feed platform's overall archit
 - **Python Version**: 3.10+
 - **Database**: SQLite (application data)
 - **Vector Database**: ChromaDB (insight embeddings)
-- **AI Models**: 
+- **AI Models**:
   - Claude Sonnet 4 (extraction)
   - Llama 3.1 8B (quality evaluation via Groq)
 - **Web Scraping**: Crawl4AI
@@ -75,19 +75,19 @@ Topic → Query Generation → Source Discovery → Extraction → Quality Filte
 async def process_topic(user_topic: str) -> dict:
     # 1. Generate search queries
     queries = generate_search_queries(user_topic)
-    
+
     # 2. Discover sources
     sources = await discover_sources_for_topic(user_topic, queries)
-    
+
     # 3. Extract insights
     extraction_results = []
     for url in sources:
         result = await extract_from_url(url)
         extraction_results.append(result)
-    
+
     # 4. Filter & store
     added_ids = add_insights_batch(insights, topic=user_topic)
-    
+
     return result
 ```
 
@@ -253,17 +253,17 @@ response = client.messages.create(
 ```python
 def calculate_source_quality(url: str, title: str, snippet: str) -> int:
     score = 100  # Start at 100
-    
+
     # Tier 1 domains (research, gov, top tech): +50
     # Tier 2 domains (established media): +25
     # Banned domains: -1000 (reject)
-    
+
     # Quality indicators in title/snippet: +10 each
     # - "case study", "research", "data", "analysis"
-    
+
     # Negative indicators: -20 each
     # - "listicle", "top 10", "you won't believe"
-    
+
     return score
 ```
 
@@ -274,7 +274,7 @@ def is_extraction_valuable(insights: dict) -> bool:
     # - Arrow notation (→)
     # - Implication words (because, therefore, reveals)
     # - Specificity (numbers, company names)
-    
+
     valuable_count = sum(1 for insight in insights if has_insight_markers(insight))
     return valuable_count >= 3 or (valuable_count / total) >= 0.6
 ```
@@ -378,10 +378,10 @@ filtered = add_insights_batch(insights, topic)
 async def extract_from_url(url: str) -> Optional[Dict]:
     """
     Main production extraction function
-    
+
     Args:
         url: Source URL to extract from
-        
+
     Returns:
         dict with status, insights, quality_score, etc.
         None if extraction fails
@@ -577,5 +577,5 @@ print(f"    [DEBUG] Extraction: {successful} succeeded, {failed} failed ({succes
 
 ---
 
-**Last Updated**: November 2024  
+**Last Updated**: November 2024
 **Version**: 1.0

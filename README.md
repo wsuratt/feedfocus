@@ -1,18 +1,22 @@
-# 🔥 Insight Feed - TikTok for Insights
+# FeedFocus
 
-A mobile-first vertical scrolling feed of AI-curated insights. Swipe through interesting findings, trends, and opportunities personalized to your interests.
+A personalized insight feed platform with ML-powered recommendations. Discover content from topics you follow through a unified feed interface.
 
-## What This Is
+## Overview
 
-Instead of searching for information, you **discover** it. Add your interests, and AI agents automatically find and curate high-quality insights for you. Swipe through your personalized feed like TikTok - but for knowledge.
+FeedFocus provides a unified feed experience with two modes:
+- **For You**: ML-scored personalized recommendations
+- **Following**: Latest insights from topics you follow
+
+Users can follow topics, engage with insights (like, save, dismiss), and the system learns from engagement to improve recommendations.
 
 ## Features
 
-- **🎯 Interest-Based**: Add topics you care about (AI, startups, investing, etc.)
-- **🤖 AI Agents**: Automatically discover and evaluate high-quality sources
-- **📱 Mobile-First**: Swipe up to see next insight, like/bookmark/dismiss
-- **✨ Personalized**: Feed learns from your engagement
-- **⚡ Fast Discovery**: No searching, just scrolling
+- **Topic-Based**: Follow topics you care about (AI, startups, investing, etc.)
+- **Unified Feed**: Two-tab interface with For You and Following feeds
+- **Engagement Tracking**: Like, save, and dismiss insights
+- **Personalized**: ML-based scoring and ranking
+- **Cross-Platform**: Web and mobile (React Native) applications
 
 ## Quick Start
 
@@ -95,16 +99,15 @@ This will:
 
 **Note**: First run takes 5-10 minutes as it creates agents and discovers sources.
 
-### Step 3: Swipe Through Insights
+### Step 3: Browse Insights
 
 1. Visit http://localhost:3000
-2. Swipe up (or click next) to see insights
-3. ❤️ Like what resonates
-4. 🔖 Bookmark to save for later
-5. ✕ Dismiss cards you're not interested in
-6. ↗️ Share (coming soon)
+2. Browse through insights
+3. Like insights that resonate
+4. Bookmark to save for later
+5. Dismiss insights you're not interested in
 
-Your engagement helps the feed learn what you find valuable!
+Your engagement helps the feed learn what you find valuable.
 
 ## Project Structure
 
@@ -294,10 +297,10 @@ curl http://localhost:8000/api/feed?limit=5
 ## Documentation
 
 See the [`docs/`](docs/) folder for comprehensive documentation:
-- [Architecture](docs/architecture.md) - System design and data flow
-- [API Reference](docs/api.md) - Complete API documentation
+- [Documentation Index](docs/README.md) - Complete documentation navigation
+- [Architecture](docs/architecture/) - System design and patterns
+- [API Reference](docs/architecture/api-endpoints.md) - API documentation
 - [Testing Guide](tests/README.md) - How to run tests
-- [Training Data](training_data/README.md) - SLM fine-tuning data collection
 
 ## Future Enhancements
 
@@ -332,6 +335,4 @@ MIT
 
 ---
 
-**Built by** [Your Name]
-
-**Questions?** Check [`docs/`](docs/) for comprehensive documentation.
+For comprehensive documentation, see [`docs/`](docs/).

@@ -452,9 +452,9 @@ await fetch('http://localhost:8000/api/interests', {
 await fetch('http://localhost:8000/api/feed/engage', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ 
-    insight_id: 'abc123', 
-    action: 'like' 
+  body: JSON.stringify({
+    insight_id: 'abc123',
+    action: 'like'
   })
 });
 ```
@@ -586,5 +586,5 @@ GET /api/analytics/sources     # Source quality stats
 
 ---
 
-**Last Updated**: November 2024  
+**Last Updated**: November 2024
 **API Version**: 1.0

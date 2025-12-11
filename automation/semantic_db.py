@@ -123,7 +123,7 @@ def add_insight(insight: Dict) -> str:
 
     # Add clean text to metadata for display (not just for embedding)
     metadata["text"] = insight.get("text", "")
-    
+
     collection.add(
         ids=[insight_id],
         embeddings=[embedding],
@@ -138,14 +138,14 @@ def add_insight(insight: Dict) -> str:
 def evaluate_insight_quality_slm(insight_text: str, topic: str) -> dict:
     """
     Use Groq's Llama 3.2 (3B) for fast, free quality evaluation
-    
+
     Returns: {
         "should_include": bool,
         "score": int (0-10),
         "reason": str
     }
     """
-    
+
     prompt = f"""Evaluate this insight for a feed about "{topic}".
 
 Insight: {insight_text}
@@ -172,28 +172,28 @@ Respond ONLY with JSON (no markdown):
             temperature=0.1,  # Low temp for consistent classification
             max_tokens=150,
         )
-        
+
         result_text = response.choices[0].message.content.strip()
-        
+
         # Parse JSON (Llama sometimes adds markdown)
         if result_text.startswith("```"):
             result_text = result_text.split("```")[1]
             if result_text.startswith("json"):
                 result_text = result_text[4:]
             result_text = result_text.strip()
-        
+
         result = json.loads(result_text)
-        
+
         # Ensure boolean
         if 'include' not in result:
             result['include'] = result.get('score', 0) >= 7
-        
+
         return {
             "should_include": result.get('include', True),
             "score": result.get('score', 7),
             "reason": result.get('reason', '')
         }
-        
+
     except Exception as e:
         print(f"  ⚠️  SLM evaluation error: {e}")
         # Fail open - use fast heuristics
@@ -210,20 +210,20 @@ def should_include_insight(insight_text: str, topic: str = "") -> bool:
     """
     Two-stage filtering: Fast path (cheap checks) + SLM evaluation (smart checks)
     """
-    
+
     # FAST PATH: Cheap checks (no API calls)
     # 1. Length check
     if len(insight_text) < 80 or len(insight_text) > 500:
         return False
-    
+
     # 2. Must have some capitalization or numbers (basic quality signal)
     import re
     has_capitals = bool(re.search(r'[A-Z][a-z]{2,}', insight_text))
     has_numbers = bool(re.search(r'\d+', insight_text))
-    
+
     if not (has_capitals or has_numbers):
         return False
-    
+
     # 3. Obvious spam (instant reject)
     spam_terms = [
         'click here', 'sign up now', 'free trial', 'limited time offer',
@@ -234,21 +234,21 @@ def should_include_insight(insight_text: str, topic: str = "") -> bool:
     text_lower = insight_text.lower()
     if any(term in text_lower for term in spam_terms):
         return False
-    
+
     # 4. Obvious self-promotion (instant reject)
     self_promo = ['our platform', 'our solution', 'our product', 'our software', 'our service']
     if any(term in text_lower for term in self_promo):
         return False
-    
+
     # SLOW PATH: SLM evaluation (nuanced quality checks)
     # Uses caching to avoid repeated API calls for same insight
     result = evaluate_insight_quality_slm(insight_text, topic or "general insights")
-    
+
     # Log rejections for debugging
     if not result['should_include']:
         print(f"  ❌ Filtered (score {result['score']}): {insight_text[:60]}...")
         print(f"     Reason: {result['reason']}")
-    
+
     return result['should_include']
 
 
@@ -257,12 +257,12 @@ def is_semantically_similar(text1: str, text2: str, threshold: float = 0.85) -> 
     try:
         emb1 = model.encode(text1)
         emb2 = model.encode(text2)
-        
+
         # Cosine similarity
         similarity = sum(a * b for a, b in zip(emb1, emb2)) / (
             (sum(a * a for a in emb1) ** 0.5) * (sum(b * b for b in emb2) ** 0.5)
         )
-        
+
         return similarity > threshold
     except:
         return False
@@ -272,20 +272,20 @@ def add_insights_batch(insights: List[Dict], topic: str = "") -> List[str]:
     """Add multiple insights with semantic deduplication and quality filtering.
     Returns list of inserted IDs.
     """
-    
+
     print(f"    [DEBUG] add_insights_batch: Processing {len(insights)} insights for topic '{topic}'")
-    
+
     # Deduplicate with semantic similarity check
     unique_insights = []
     duplicates_removed = 0
     quality_filtered = 0
-    seen_texts = []  # List of texts we've accepted
-    
+    seen_texts: list[str] = []  # List of texts we've accepted
+
     for i, insight in enumerate(insights):
         text = insight.get('text', '')
-        
+
         print(f"    [DEBUG] Insight {i+1}/{len(insights)}: {text[:100]}...")
-        
+
         # Check quality first (with topic filtering)
         if not should_include_insight(text, topic):
             quality_filtered += 1
@@ -293,7 +293,7 @@ def add_insights_batch(insights: List[Dict], topic: str = "") -> List[str]:
             continue
         else:
             print(f"    [DEBUG]   → PASSED quality filter")
-        
+
         # Check for semantic duplicates (tightened to catch similar angles)
         is_duplicate = False
         for seen_text in seen_texts:
@@ -302,31 +302,31 @@ def add_insights_batch(insights: List[Dict], topic: str = "") -> List[str]:
                 duplicates_removed += 1
                 print(f"    [DEBUG]   → DUPLICATE (similar to existing insight)")
                 break
-        
+
         if not is_duplicate:
             seen_texts.append(text)
             unique_insights.append(insight)
             print(f"    [DEBUG]   → ACCEPTED (unique)")
-    
+
     print(f"    [DEBUG] Filtering summary:")
     print(f"    [DEBUG]   - Started with: {len(insights)} insights")
     print(f"    [DEBUG]   - Quality filtered: {quality_filtered}")
     print(f"    [DEBUG]   - Duplicates removed: {duplicates_removed}")
     print(f"    [DEBUG]   - Unique insights: {len(unique_insights)}")
-    
+
     if duplicates_removed > 0:
         print(f"  ⏭️  Removed {duplicates_removed} duplicate insights (semantic)")
     if quality_filtered > 0:
         print(f"  🗑️  Filtered {quality_filtered} low-quality insights")
-    
+
     print(f"  ✅ Adding {len(unique_insights)}/{len(insights)} insights to DB")
-    
+
     # Add unique, high-quality insights
     added_ids = []
     for insight in unique_insights:
         insight_id = add_insight(insight)
         added_ids.append(insight_id)
-    
+
     return added_ids
 
 
