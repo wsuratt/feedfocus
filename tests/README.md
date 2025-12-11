@@ -1,12 +1,47 @@
-# Testing Scripts
+# Testing
+
+## Structure
+
+```
+tests/
+├── conftest.py              # Pytest configuration and fixtures
+├── unit/                    # Unit tests
+│   ├── test_topic_validation.py
+│   └── test_semantic_search.py
+├── integration/             # API endpoint tests
+├── fixtures/                # Test data
+│   ├── sample_topics.py
+│   └── sample_insights.py
+└── README.md
+```
+
+## Running Tests
+
+```bash
+# All tests
+python -m pytest tests/
+
+# Unit tests only
+python -m pytest tests/unit/
+
+# Specific test
+python -m pytest tests/unit/test_topic_validation.py
+
+# With coverage
+python -m pytest --cov=backend tests/
+```
+
+See [docs/architecture/testing.md](../docs/architecture/testing.md) for comprehensive testing documentation.
+
+## Original Testing Scripts Scripts
 
 This directory contains all testing and debugging scripts for the insight extraction pipeline.
 
 ## Available Tests
 
 ### `test_quality.py`
-**Purpose:** End-to-end quality test for a single topic  
-**Usage:** `python tests/test_quality.py`  
+**Purpose:** End-to-end quality test for a single topic
+**Usage:** `python tests/test_quality.py`
 **What it does:**
 - Resets database
 - Processes one topic through full pipeline
@@ -18,8 +53,8 @@ This directory contains all testing and debugging scripts for the insight extrac
 ---
 
 ### `test_manual_extraction.py`
-**Purpose:** Test extraction on specific URLs  
-**Usage:** `python tests/test_manual_extraction.py <url> [topic]`  
+**Purpose:** Test extraction on specific URLs
+**Usage:** `python tests/test_manual_extraction.py <url> [topic]`
 **What it does:**
 - Extracts insights from a single URL
 - Shows raw extracted insights
@@ -36,8 +71,8 @@ python tests/test_manual_extraction.py "https://berkshirehathaway.com/letters/20
 ---
 
 ### `test_extraction.py`
-**Purpose:** Test extraction logic in isolation  
-**Usage:** `python tests/test_extraction.py`  
+**Purpose:** Test extraction logic in isolation
+**Usage:** `python tests/test_extraction.py`
 **What it does:**
 - Tests LLM extraction prompt
 - Validates JSON parsing
@@ -48,8 +83,8 @@ python tests/test_manual_extraction.py "https://berkshirehathaway.com/letters/20
 ---
 
 ### `test_automation.py`
-**Purpose:** Test automation pipeline components  
-**Usage:** `python tests/test_automation.py`  
+**Purpose:** Test automation pipeline components
+**Usage:** `python tests/test_automation.py`
 **What it does:**
 - Tests query generation
 - Tests source discovery

@@ -30,15 +30,15 @@ type EngagementAction = 'view' | 'like' | 'save' | 'dismiss';
 
 export function UnifiedFeed() {
   // Tab state
-  const [activeTab, setActiveTab] = useState<FeedType>('following');
-  
+  const [activeTab, setActiveTab] = useState<FeedType>('for_you');
+
   // Feed data
   const [insights, setInsights] = useState<UnifiedInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
-  
+
   // Engagement state
   const [likedInsights, setLikedInsights] = useState<Set<string>>(new Set());
   const [savedInsights, setSavedInsights] = useState<Set<string>>(new Set());
@@ -87,7 +87,7 @@ export function UnifiedFeed() {
       const liked = localStorage.getItem('likedInsights');
       const saved = localStorage.getItem('savedInsights');
       const dismissed = localStorage.getItem('dismissedInsights');
-      
+
       if (liked) setLikedInsights(new Set(JSON.parse(liked)));
       if (saved) setSavedInsights(new Set(JSON.parse(saved)));
       if (dismissed) setDismissedInsights(new Set(JSON.parse(dismissed)));
@@ -174,13 +174,13 @@ export function UnifiedFeed() {
 
     try {
       const currentOffset = reset ? 0 : offset;
-      const endpoint = activeTab === 'following' 
+      const endpoint = activeTab === 'following'
         ? `/api/feed/following`
         : `/api/feed/for-you`;
-      
+
       // Get auth token
       const token = await getAccessToken();
-      
+
       const response = await fetch(
         `${API_URL}${endpoint}?limit=${LIMIT}&offset=${currentOffset}`,
         {
@@ -190,11 +190,11 @@ export function UnifiedFeed() {
           },
         }
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const data: FeedResponse = await response.json();
 
       // Filter out dismissed insights
@@ -223,7 +223,7 @@ export function UnifiedFeed() {
     // Record with backend
     try {
       const token = await getAccessToken();
-      
+
       await fetch(`${API_URL}/api/feed/engage`, {
         method: 'POST',
         headers: {
@@ -260,7 +260,7 @@ export function UnifiedFeed() {
       const newDismissed = new Set(dismissedInsights);
       newDismissed.add(insightId);
       setDismissedInsights(newDismissed);
-      
+
       // Remove from current list
       setInsights(prev => prev.filter(i => i.id !== insightId));
     }
@@ -399,22 +399,9 @@ export function UnifiedFeed() {
               {user?.email?.[0].toUpperCase() || 'U'}
             </button>
           </div>
-          
+
           {/* Tabs */}
           <div className="flex gap-1">
-            <button
-              onClick={() => {
-                setActiveTab('following');
-                setInsights([]);
-              }}
-              className={`flex-1 py-3 text-sm font-medium border-b-2 transition ${
-                activeTab === 'following'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Following
-            </button>
             <button
               onClick={() => {
                 setActiveTab('for_you');
@@ -427,6 +414,19 @@ export function UnifiedFeed() {
               }`}
             >
               For You
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('following');
+                setInsights([]);
+              }}
+              className={`flex-1 py-3 text-sm font-medium border-b-2 transition ${
+                activeTab === 'following'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Following
             </button>
           </div>
         </div>

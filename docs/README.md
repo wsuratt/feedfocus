@@ -1,69 +1,54 @@
 # Documentation
 
-Comprehensive documentation for the Insight Feed platform.
+Comprehensive documentation for the FeedFocus platform.
 
 ## Core Documentation
 
-### [Architecture](architecture.md)
+### [Architecture](architecture/)
 Complete system architecture, technology stack, and design patterns.
 
-**Topics covered:**
-- Technology stack (FastAPI, React, ChromaDB, Claude, Groq)
-- Application structure and file organization
-- Pipeline architecture (discovery → extraction → filtering → storage)
-- Quality filtering system (fast path + SLM evaluation)
-- Vector database design
-- Query generation strategy
-- Performance and scalability
-- Cost architecture
-- Security patterns
+**Key Documentation:**
+- [Application Architecture](architecture/application-architecture.md) - System design and tech stack
+- [Database](architecture/database.md) - SQLite and ChromaDB patterns
+- [Authentication](architecture/authentication.md) - Supabase auth implementation
+- [API Endpoints](architecture/api-endpoints.md) - Backend API design
+- [Unified Feed](architecture/unified-feed.md) - Feed generation system
 
-**Read this if you want to understand:**
-- How the system works end-to-end
-- Why design decisions were made
-- Where to find specific functionality
+**See [Architecture README](architecture/README.md) for complete index.**
 
 ---
 
-### [API Reference](api.md)
-Complete HTTP API documentation with examples.
+## Feature Documentation
 
-**Endpoints documented:**
-- `GET /api/interests` - Get user interests
-- `POST /api/interests` - Add interest
-- `DELETE /api/interests/{id}` - Remove interest
-- `GET /api/feed` - Get personalized insights
-- `POST /api/feed/engage` - Record engagement
-- `GET /api/stats` - Database statistics
+### [Extraction Pipeline](features/extraction-pipeline-plan.md)
+Search, extract, and refresh pipeline for content extraction.
 
-**Read this if you want to:**
-- Integrate with the API
-- Understand request/response formats
-- Test endpoints manually
-- Build a client application
+**Status:** In Development
+
+**Related:**
+- [Implementation Plan](features/extraction-pipeline-implementation.md)
 
 ---
 
 ## Testing Documentation
 
 ### [Testing Guide](../tests/README.md)
-How to run tests and debug the insight pipeline.
+How to run tests and debug the system.
 
-**Test scripts covered:**
-- `test_quality.py` - End-to-end pipeline test
-- `test_manual_extraction.py` - Single URL extraction test
-- `test_extraction.py` - Extraction logic test
-- `test_automation.py` - Automation components test
+**Test categories:**
+- Unit tests for individual functions
+- Integration tests for API endpoints
+- End-to-end workflow tests
 
 ### [Training Data](../training_data/README.md)
-Training data collection for fine-tuning a cheaper SLM to replace Claude.
+Training data collection for SLM fine-tuning.
 
-**Collected data:**
-- Extraction inputs/outputs (source content → insights)
-- User engagement (likes, saves, dismissals)
-- Query generation performance
+---
 
-**Cost savings:** 30x cheaper ($0.12/topic → $0.004/topic)
+## Deployment
+
+### [Deployment Guide](deployment/deployment.md)
+Production deployment instructions and configuration.
 
 ---
 
@@ -71,18 +56,17 @@ Training data collection for fine-tuning a cheaper SLM to replace Claude.
 
 **Getting Started:**
 1. [Project README](../README.md) - Installation and quick start
-2. [Architecture](architecture.md) - Understand the system
-3. [API Reference](api.md) - Use the API
+2. [Architecture Overview](architecture/) - Understand the system
+3. [API Reference](architecture/api-endpoints.md) - Use the API
 
 **Development:**
 1. [Testing Guide](../tests/README.md) - Run tests
-2. [Architecture](architecture.md#development-architecture) - Code organization
-3. [API Reference](api.md#api-client-examples) - Client examples
+2. [Architecture Docs](architecture/) - Code organization
+3. [.windsurfrules](../../.windsurfrules) - Coding guidelines
 
 **Debugging:**
-1. [Testing Guide](../tests/README.md#common-issues) - Common issues
-2. [Architecture](architecture.md#monitoring-and-observability) - Debug output
-3. [API Reference](api.md#error-responses) - Error handling
+1. [Testing Guide](../tests/README.md) - Common issues
+2. [Architecture Docs](architecture/) - System design
 
 ---
 
@@ -90,32 +74,32 @@ Training data collection for fine-tuning a cheaper SLM to replace Claude.
 
 When adding new features:
 
-1. **Update Architecture** if system design changes
-2. **Update API Docs** if endpoints change
-3. **Add Tests** for new functionality
-4. **Update README** if setup changes
+1. **Read relevant architecture docs** before implementing
+2. **Update architecture docs** if system design changes
+3. **Add tests** for new functionality
+4. **Update this README** if documentation structure changes
 
 ---
 
 ## Documentation Standards
 
-### Code Comments
-- Docstrings for all public functions
-- Type hints for function parameters
-- Explain "why" not "what" in comments
+### Code Documentation
+- Minimal comments - code should be self-documenting
+- Docstrings for public functions only
+- Type hints for all function parameters
+- Comments explain "why", not "what"
 
-### Architecture Docs
+### Architecture Documentation
 - Include code examples
-- Show data flow diagrams (ASCII or Markdown)
+- Show implementation patterns
 - Link to relevant source files
-- Keep up to date with major changes
+- Keep up to date with changes
 
-### API Docs
-- Provide curl examples
-- Show full request/response JSON
+### API Documentation
+- Provide examples with full request/response
 - Document all error cases
-- Include client library examples
+- Show authentication patterns
 
 ---
 
-**Last Updated**: November 2024
+**Last Updated:** December 2024

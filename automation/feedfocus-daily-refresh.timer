@@ -1,0 +1,11 @@
+[Unit]
+Description=FeedFocus Daily Content Refresh Timer
+Requires=feedfocus-daily-refresh.service
+
+[Timer]
+OnCalendar=daily
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -214,10 +214,10 @@ SELECT COUNT(*) FROM insights;
 -- Should return: 1830
 
 -- Check topics
-SELECT topic, COUNT(*) as count 
-FROM insights 
-GROUP BY topic 
-ORDER BY count DESC 
+SELECT topic, COUNT(*) as count
+FROM insights
+GROUP BY topic
+ORDER BY count DESC
 LIMIT 10;
 
 -- Check user topics
@@ -299,6 +299,6 @@ sudo systemctl restart feedfocus-backend
 
 ---
 
-**Status:** Ready to deploy  
-**Risk:** Low (ChromaDB backup exists, old endpoints still work)  
+**Status:** Ready to deploy
+**Risk:** Low (ChromaDB backup exists, old endpoints still work)
 **Reversible:** Yes (database backup)

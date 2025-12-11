@@ -1,0 +1,14 @@
+[Unit]
+Description=FeedFocus Daily Content Refresh
+After=network.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/feedfocus
+ExecStart=/home/ubuntu/feedfocus/.venv/bin/python /home/ubuntu/feedfocus/automation/daily_refresh_queue.py
+StandardOutput=append:/home/ubuntu/feedfocus/logs/daily_refresh.log
+StandardError=append:/home/ubuntu/feedfocus/logs/daily_refresh.log
+
+[Install]
+WantedBy=multi-user.target

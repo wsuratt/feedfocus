@@ -85,9 +85,9 @@ export function Login() {
     <div className="min-h-screen flex bg-white">
       {/* Left Side - Logo */}
       <div className="hidden lg:flex lg:flex-1 items-center justify-center">
-        <img 
-          src="/icon.png" 
-          alt="Feed Focus" 
+        <img
+          src="/icon.png"
+          alt="Feed Focus"
           className="w-80 h-80"
         />
       </div>
@@ -97,18 +97,18 @@ export function Login() {
         <div className="w-full max-w-md">
           {/* Logo for mobile */}
           <div className="lg:hidden mb-8 flex justify-center">
-            <img 
-              src="/icon.png" 
-              alt="Feed Focus" 
+            <img
+              src="/icon.png"
+              alt="Feed Focus"
               className="w-16 h-16"
             />
           </div>
 
-          <h1 className="text-6xl font-bold mb-12">The internet, filtered</h1>
-          
+          <h1 className="text-6xl font-bold mb-12">The internet, refocused</h1>
+
           <div className="max-w-xs">
             <h2 className="text-3xl font-bold mb-8">Join today.</h2>
-            
+
             {/* OAuth Buttons */}
             <div className="space-y-3 mb-4">
               <button
@@ -192,8 +192,8 @@ export function Login() {
             {/* Error Message */}
             {error && (
               <div className={`mt-4 p-3 rounded-lg text-sm ${
-                error.includes('Success') 
-                  ? 'bg-green-50 text-green-800' 
+                error.includes('Success')
+                  ? 'bg-green-50 text-green-800'
                   : 'bg-red-50 text-red-800'
               }`}>
                 {error}
@@ -255,8 +255,8 @@ export function Login() {
 
               {error && (
                 <div className={`p-3 rounded-lg text-sm ${
-                  error.includes('Success') 
-                    ? 'bg-green-50 text-green-800' 
+                  error.includes('Success')
+                    ? 'bg-green-50 text-green-800'
                     : 'bg-red-50 text-red-800'
                 }`}>
                   {error}
