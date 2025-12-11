@@ -13,7 +13,6 @@ sqlite-utils==3.36
 
 # Vector search (needed for semantic_db.search_insights)
 numpy<2.0.0  # ChromaDB needs NumPy 1.x
-huggingface-hub<0.12.0  # sentence-transformers 2.2.2 needs cached_download
 chromadb==0.4.22  # Latest stable 0.4.x, matches your original >=0.4.0
 sentence-transformers==2.2.2
 
