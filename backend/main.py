@@ -994,6 +994,83 @@ async def get_topic_status(
         raise HTTPException(status_code=500, detail=f"Failed to get topic status: {str(e)}")
 
 
+@app.get("/api/topics/{topic}/insights")
+async def get_topic_insights(
+    topic: str,
+    limit: int = 30,
+    offset: int = 0,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
+    """
+    Get insights for a specific topic with pagination.
+
+    Returns insights ordered by quality score, with engagement tracking.
+    """
+    try:
+        topic = topic.strip()
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Get insights for this topic
+            cursor.execute("""
+                SELECT
+                    id,
+                    topic,
+                    category,
+                    text,
+                    source_url,
+                    source_domain,
+                    quality_score,
+                    engagement_score,
+                    created_at
+                FROM insights
+                WHERE topic = ?
+                ORDER BY quality_score DESC, created_at DESC
+                LIMIT ? OFFSET ?
+            """, (topic, limit, offset))
+
+            insights = []
+            for row in cursor.fetchall():
+                insight_id, topic, category, text, source_url, source_domain, \
+                quality_score, engagement_score, created_at = row
+
+                insights.append({
+                    "id": insight_id,
+                    "topic": topic,
+                    "category": category,
+                    "text": text,
+                    "source_url": source_url,
+                    "source_domain": source_domain,
+                    "quality_score": quality_score,
+                    "engagement_score": engagement_score,
+                    "created_at": created_at
+                })
+
+            # Check if there are more results
+            cursor.execute("""
+                SELECT COUNT(*) FROM insights WHERE topic = ?
+            """, (topic,))
+            total_count = cursor.fetchone()[0]
+            has_more = (offset + len(insights)) < total_count
+
+            return {
+                "topic": topic,
+                "insights": insights,
+                "count": len(insights),
+                "total": total_count,
+                "has_more": has_more
+            }
+
+        finally:
+            conn.close()
+
+    except Exception as e:
+        logger.error(f"Failed to get insights for topic '{topic}': {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get insights: {str(e)}")
+
+
 @app.post("/api/topics/{topic}/retry")
 async def retry_extraction(
     topic: str,
