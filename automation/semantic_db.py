@@ -3,6 +3,8 @@ import json
 import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional
+import sqlite3
+import uuid
 
 import chromadb
 from chromadb.config import Settings
@@ -18,6 +20,7 @@ load_dotenv()
 # Ensure consistent ChromaDB path regardless of where script is run from
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHROMA_PATH = os.path.join(PROJECT_ROOT, "chroma_db")
+DB_PATH = os.path.join(PROJECT_ROOT, "insights.db")
 
 # Initialize ChromaDB persistent client
 chroma_client = chromadb.PersistentClient(
@@ -130,6 +133,42 @@ def add_insight(insight: Dict) -> str:
         documents=[doc],
         metadatas=[metadata],
     )
+
+    # Also add to SQLite insights table for feed
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        sql_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO insights (
+                id, topic, category, text, source_url, source_domain,
+                quality_score, engagement_score, created_at, updated_at,
+                is_archived, chroma_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            sql_id,
+            insight.get("topic", ""),
+            insight.get("category", ""),
+            insight.get("text", ""),
+            insight.get("source_url", ""),
+            insight.get("source_domain", ""),
+            float(insight.get("quality_score", 0)),
+            0.0,  # engagement_score starts at 0
+            insight.get("extracted_at", datetime.now().isoformat()),
+            datetime.now().isoformat(),
+            0,  # not archived
+            insight_id  # chroma_id for reference
+        ))
+
+        conn.commit()
+        conn.close()
+    except sqlite3.IntegrityError:
+        # Already exists in SQLite, that's fine
+        pass
+    except Exception as e:
+        # Log error but don't fail the whole operation
+        print(f"Warning: Failed to add insight to SQLite: {e}")
 
     return insight_id
 

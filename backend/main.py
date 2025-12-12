@@ -966,14 +966,23 @@ async def get_topic_status(
         cursor = conn.cursor()
 
         try:
+            # Get insight count for exact match
+            insight_count = get_topic_insight_count(topic)
+
+            # If no insights found, try fuzzy matching
+            if insight_count == 0:
+                similar_result = find_similar_topic(topic, threshold=0.80)
+                if similar_result:
+                    similar_topic, similarity = similar_result
+                    logger.info(f"Fuzzy match: '{topic}' -> '{similar_topic}' (similarity: {similarity:.2f})")
+                    topic = similar_topic
+                    insight_count = get_topic_insight_count(topic)
+
             cursor.execute("""
                 SELECT COUNT(*) FROM user_topics
                 WHERE user_id = ? AND topic = ?
             """, (user_id, topic))
             is_following = cursor.fetchone()[0] > 0
-
-            # Get insight count
-            insight_count = get_topic_insight_count(topic)
 
             # Get extraction job status (most recent)
             cursor.execute("""
@@ -1053,6 +1062,18 @@ async def get_topic_insights(
         cursor = conn.cursor()
 
         try:
+            # Try exact match first
+            cursor.execute("SELECT COUNT(*) FROM insights WHERE topic = ?", (topic,))
+            exact_count = cursor.fetchone()[0]
+
+            # If no exact match, try fuzzy matching
+            if exact_count == 0:
+                similar_result = find_similar_topic(topic, threshold=0.80)
+                if similar_result:
+                    similar_topic, similarity = similar_result
+                    logger.info(f"Fuzzy match for insights: '{topic}' -> '{similar_topic}' (similarity: {similarity:.2f})")
+                    topic = similar_topic
+
             # Get insights for this topic
             cursor.execute("""
                 SELECT

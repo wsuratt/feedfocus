@@ -615,6 +615,13 @@ export function Search() {
                   transition={{ delay: index * 0.03 }}
                   className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow"
                 >
+                  {/* Topic Tag */}
+                  <div className="mb-3">
+                    <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
+                      #{insight.topic}
+                    </span>
+                  </div>
+
                   {/* Category Badge */}
                   <div className="mb-3">
                     <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase tracking-wide ${getCategoryColor(insight.category)}`}>
