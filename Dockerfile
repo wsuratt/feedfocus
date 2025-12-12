@@ -47,7 +47,7 @@ COPY requirements-backend.txt .
 RUN pip install --no-cache-dir -r requirements-backend.txt
 
 # Install Playwright browsers for crawl4ai
-RUN crawl4ai-setup
+RUN python -m playwright install --with-deps chromium
 
 # Set environment variable to suppress tokenizers parallelism warning
 ENV TOKENIZERS_PARALLELISM=false
