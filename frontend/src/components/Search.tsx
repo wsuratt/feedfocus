@@ -62,6 +62,9 @@ export function Search() {
 
     if (!searchQuery.trim()) return;
 
+    // Blur input to dismiss keyboard
+    (e.target as HTMLFormElement).querySelector('input')?.blur();
+
     setSearching(true);
     setError(null);
     setTopicStatus(null);
