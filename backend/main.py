@@ -968,6 +968,7 @@ async def get_topic_status(
         try:
             # Get insight count for exact match
             insight_count = get_topic_insight_count(topic)
+            matched_topics = None
 
             # If no insights found, try fuzzy matching
             if insight_count == 0:
@@ -977,6 +978,22 @@ async def get_topic_status(
                     logger.info(f"Fuzzy match: '{topic}' -> '{similar_topic}' (similarity: {similarity:.2f})")
                     topic = similar_topic
                     insight_count = get_topic_insight_count(topic)
+                # If still no match, try partial text matching (especially for short queries)
+                elif len(topic) <= 4:
+                    cursor.execute("""
+                        SELECT topic, COUNT(*) as count
+                        FROM insights
+                        WHERE LOWER(topic) LIKE ? AND is_archived = 0
+                        GROUP BY topic
+                        ORDER BY count DESC
+                    """, (f'%{topic.lower()}%',))
+                    partial_matches = cursor.fetchall()
+                    if partial_matches:
+                        matched_topics = [t[0] for t in partial_matches]
+                        total_count = sum(t[1] for t in partial_matches)
+                        logger.info(f"Partial match: '{topic}' -> {len(matched_topics)} topics ({total_count} total insights)")
+                        # Keep original topic for display, but we'll use matched_topics for queries
+                        insight_count = total_count
 
             cursor.execute("""
                 SELECT COUNT(*) FROM user_topics
@@ -1065,6 +1082,7 @@ async def get_topic_insights(
             # Try exact match first
             cursor.execute("SELECT COUNT(*) FROM insights WHERE topic = ?", (topic,))
             exact_count = cursor.fetchone()[0]
+            matched_topics = None
 
             # If no exact match, try fuzzy matching
             if exact_count == 0:
@@ -1073,24 +1091,57 @@ async def get_topic_insights(
                     similar_topic, similarity = similar_result
                     logger.info(f"Fuzzy match for insights: '{topic}' -> '{similar_topic}' (similarity: {similarity:.2f})")
                     topic = similar_topic
+                # If still no match, try partial text matching (especially for short queries)
+                elif len(topic) <= 4:
+                    cursor.execute("""
+                        SELECT topic
+                        FROM insights
+                        WHERE LOWER(topic) LIKE ? AND is_archived = 0
+                        GROUP BY topic
+                        ORDER BY COUNT(*) DESC
+                    """, (f'%{topic.lower()}%',))
+                    matched_topics = [row[0] for row in cursor.fetchall()]
+                    if matched_topics:
+                        logger.info(f"Partial match for insights: '{topic}' -> {len(matched_topics)} topics")
 
-            # Get insights for this topic
-            cursor.execute("""
-                SELECT
-                    id,
-                    topic,
-                    category,
-                    text,
-                    source_url,
-                    source_domain,
-                    quality_score,
-                    engagement_score,
-                    created_at
-                FROM insights
-                WHERE topic = ?
-                ORDER BY quality_score DESC, created_at DESC
-                LIMIT ? OFFSET ?
-            """, (topic, limit, offset))
+            # Get insights for this topic (or all matched topics)
+            if matched_topics:
+                # Fetch from all matching topics
+                placeholders = ','.join('?' * len(matched_topics))
+                cursor.execute(f"""
+                    SELECT
+                        id,
+                        topic,
+                        category,
+                        text,
+                        source_url,
+                        source_domain,
+                        quality_score,
+                        engagement_score,
+                        created_at
+                    FROM insights
+                    WHERE topic IN ({placeholders})
+                    ORDER BY quality_score DESC, created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (*matched_topics, limit, offset))
+            else:
+                # Fetch from single topic
+                cursor.execute("""
+                    SELECT
+                        id,
+                        topic,
+                        category,
+                        text,
+                        source_url,
+                        source_domain,
+                        quality_score,
+                        engagement_score,
+                        created_at
+                    FROM insights
+                    WHERE topic = ?
+                    ORDER BY quality_score DESC, created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (topic, limit, offset))
 
             insights = []
             for row in cursor.fetchall():
@@ -1110,10 +1161,17 @@ async def get_topic_insights(
                 })
 
             # Check if there are more results
-            cursor.execute("""
-                SELECT COUNT(*) FROM insights WHERE topic = ?
-            """, (topic,))
-            total_count = cursor.fetchone()[0]
+            if matched_topics:
+                placeholders = ','.join('?' * len(matched_topics))
+                cursor.execute(f"""
+                    SELECT COUNT(*) FROM insights WHERE topic IN ({placeholders})
+                """, matched_topics)
+                total_count = cursor.fetchone()[0]
+            else:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM insights WHERE topic = ?
+                """, (topic,))
+                total_count = cursor.fetchone()[0]
             has_more = (offset + len(insights)) < total_count
 
             return {
