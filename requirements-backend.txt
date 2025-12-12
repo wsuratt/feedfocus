@@ -6,7 +6,7 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 python-multipart==0.0.6
 requests==2.31.0
-httpx==0.24.1  # Compatible with Groq 0.4.2
+httpx>=0.25.0 # Required for anthropic SDK (socket_options support)
 
 # Database
 sqlite-utils==3.36
