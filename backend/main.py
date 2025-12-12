@@ -12,10 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from automation.semantic_db import search_insights
+from automation.topic_handler import process_topic
 from backend.extraction_queue import ExtractionQueue
 from backend.semantic_search import find_similar_topic, get_topic_insight_count
 from backend.topic_validation import validate_topic
 from backend.utils.logger import setup_logger
+import asyncio
 
 # Compute project root and ensure it's on sys.path BEFORE local imports
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -112,6 +114,42 @@ def init_database():
     conn.commit()
     conn.close()
 
+def run_extraction(topic: str, user_id: str) -> dict:
+    """
+    Wrapper function to run async extraction pipeline synchronously.
+
+    Args:
+        topic: Topic to extract insights for
+        user_id: User who requested the extraction
+
+    Returns:
+        Dict with extraction results
+    """
+    try:
+        # Run async process_topic in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(process_topic(topic))
+
+            # Adapt result format to what queue expects
+            if result.get("status") == "success":
+                return {
+                    "insight_count": result.get("insights_count", 0),
+                    "sources_processed": result.get("sources_count", 0)
+                }
+            else:
+                # Extraction failed
+                error_msg = result.get("error", "Unknown error")
+                raise Exception(f"Extraction failed: {error_msg}")
+
+        finally:
+            loop.close()
+
+    except Exception as e:
+        logger.error(f"Extraction error for topic '{topic}': {e}")
+        raise
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database, enable WAL mode, and recover stale extraction jobs."""
@@ -138,7 +176,7 @@ async def startup_event():
 
     # Initialize extraction queue with 2 workers
     logger.info("Initializing extraction queue...")
-    extraction_queue = ExtractionQueue(num_workers=2)
+    extraction_queue = ExtractionQueue(num_workers=2, extraction_fn=run_extraction)
 
     # Recover any stale jobs from previous session
     logger.info("Checking for stale extraction jobs...")
