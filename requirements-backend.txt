@@ -17,7 +17,7 @@ chromadb==0.4.22  # Latest stable 0.4.x, matches your original >=0.4.0
 sentence-transformers>=2.7.0  # Compatible with modern huggingface_hub
 
 # SLM API (needed for semantic_db evaluation)
-groq==0.4.2
+groq>=0.11.0 
 
 # Local SLM for topic validation
 transformers>=4.40.0
