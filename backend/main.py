@@ -977,6 +977,22 @@ async def get_topic_status(
                     logger.info(f"Fuzzy match: '{topic}' -> '{similar_topic}' (similarity: {similarity:.2f})")
                     topic = similar_topic
                     insight_count = get_topic_insight_count(topic)
+                # If still no match, try partial text matching (especially for short queries)
+                elif len(topic) <= 4:
+                    cursor.execute("""
+                        SELECT topic, COUNT(*) as count
+                        FROM insights
+                        WHERE LOWER(topic) LIKE ? AND is_archived = 0
+                        GROUP BY topic
+                        ORDER BY count DESC
+                        LIMIT 1
+                    """, (f'%{topic.lower()}%',))
+                    partial_match = cursor.fetchone()
+                    if partial_match:
+                        matched_topic, matched_count = partial_match
+                        logger.info(f"Partial match: '{topic}' -> '{matched_topic}' ({matched_count} insights)")
+                        topic = matched_topic
+                        insight_count = matched_count
 
             cursor.execute("""
                 SELECT COUNT(*) FROM user_topics
@@ -1073,6 +1089,21 @@ async def get_topic_insights(
                     similar_topic, similarity = similar_result
                     logger.info(f"Fuzzy match for insights: '{topic}' -> '{similar_topic}' (similarity: {similarity:.2f})")
                     topic = similar_topic
+                # If still no match, try partial text matching (especially for short queries)
+                elif len(topic) <= 4:
+                    cursor.execute("""
+                        SELECT topic, COUNT(*) as count
+                        FROM insights
+                        WHERE LOWER(topic) LIKE ? AND is_archived = 0
+                        GROUP BY topic
+                        ORDER BY count DESC
+                        LIMIT 1
+                    """, (f'%{topic.lower()}%',))
+                    partial_match = cursor.fetchone()
+                    if partial_match:
+                        matched_topic, _ = partial_match
+                        logger.info(f"Partial match for insights: '{topic}' -> '{matched_topic}'")
+                        topic = matched_topic
 
             # Get insights for this topic
             cursor.execute("""
