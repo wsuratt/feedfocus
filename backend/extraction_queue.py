@@ -15,7 +15,7 @@ from backend.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 MAX_RETRIES = 3
-TIMEOUT_SECONDS = 900  # 15 minutes
+TIMEOUT_SECONDS = 2700  # 45 minutes (extraction can take 20-30min)
 
 
 class ExtractionQueue:
