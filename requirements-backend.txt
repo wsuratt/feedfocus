@@ -27,5 +27,5 @@ accelerate>=0.20.0  # For optimized model loading
 
 # Automation/Extraction dependencies (lazy loaded when extraction runs)
 anthropic>=0.18.0  # Claude API for query generation and extraction
-duckduckgo-search>=4.0.0  # Source discovery
+ddgs>=4.0.0  # Source discovery
 crawl4ai>=0.3.0  # Web content fetching
