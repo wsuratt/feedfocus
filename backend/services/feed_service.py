@@ -40,6 +40,7 @@ class FeedService:
     ) -> List[Dict]:
         """
         Generate Following feed - insights from user's followed topics
+        Optimized with database-level scoring and pagination
 
         Args:
             user_id: User identifier
@@ -60,49 +61,52 @@ class FeedService:
         topics = [row['topic'] for row in cursor.fetchall()]
 
         if not topics:
-            # User not following any topics yet
             conn.close()
             return []
 
-        # Get all insights from these topics
+        # SQL-level scoring and pagination
         placeholders = ','.join('?' * len(topics))
-        cursor.execute(f"""
+
+        # Calculate days_old in SQL for freshness score
+        query = f"""
+        WITH scored_insights AS (
             SELECT
-                id, topic, category, text, source_url, source_domain,
-                quality_score, engagement_score, created_at
-            FROM insights
-            WHERE topic IN ({placeholders})
-            AND is_archived = 0
-        """, topics)
+                i.id, i.topic, i.category, i.text, i.source_url, i.source_domain,
+                i.quality_score, i.engagement_score, i.created_at,
+                -- Calculate composite score in SQL
+                (
+                    (i.quality_score / 10.0 * 0.20) +  -- Base quality (20%)
+                    (i.engagement_score * 0.15) +      -- Social proof (15%)
+                    (1.0) +                              -- Topic match boost (100%)
+                    (MAX(0, 1.0 - (julianday('now') - julianday(i.created_at)) / 30.0) * 0.20)  -- Freshness (20%)
+                ) as score
+            FROM insights i
+            LEFT JOIN user_engagement ue ON
+                i.id = ue.insight_id AND
+                ue.user_id = ? AND
+                ue.action = 'view'
+            WHERE i.topic IN ({placeholders})
+            AND i.is_archived = 0
+            AND ue.insight_id IS NULL  -- Exclude seen insights
+            GROUP BY i.id
+            ORDER BY score DESC
+            LIMIT ? OFFSET ?
+        )
+        SELECT * FROM scored_insights
+        """
 
-        insights = [dict(row) for row in cursor.fetchall()]
+        params = [user_id] + topics + [limit, offset]
+        cursor.execute(query, params)
 
-        # Filter out already seen
-        seen_ids = self._get_seen_insight_ids(user_id, cursor)
-        unseen = [i for i in insights if i['id'] not in seen_ids]
+        results = [dict(row) for row in cursor.fetchall()]
 
-        # Score each insight
-        for insight in unseen:
-            insight['score'] = self.scorer.calculate_feed_score(
-                user_id,
-                insight,
-                feed_type='following',
-                cursor=cursor
-            )
-
-        # Sort by score
-        ranked = sorted(unseen, key=lambda x: x['score'], reverse=True)
-
-        # Paginate
-        result = ranked[offset:offset + limit]
-
-        # Mark as viewed (async - don't block response)
-        if result:
-            self._mark_viewed(user_id, [i['id'] for i in result], cursor)
+        # Mark as viewed
+        if results:
+            self._mark_viewed(user_id, [r['id'] for r in results], cursor)
             conn.commit()
 
         conn.close()
-        return result
+        return results
 
     def generate_for_you_feed(
         self,
@@ -112,6 +116,7 @@ class FeedService:
     ) -> List[Dict]:
         """
         Generate For You feed - algorithmic recommendations from ALL topics
+        Optimized with database-level scoring and pagination
 
         Args:
             user_id: User identifier
@@ -124,42 +129,59 @@ class FeedService:
         conn = self.get_db_connection()
         cursor = conn.cursor()
 
-        # Get ALL insights (not just followed topics)
+        # Get user's followed topics for affinity boost
         cursor.execute("""
+            SELECT topic FROM user_topics WHERE user_id = ?
+        """, (user_id,))
+        followed_topics = [row['topic'] for row in cursor.fetchall()]
+
+        # Build CASE statement for topic affinity
+        if followed_topics:
+            placeholders = ','.join('?' * len(followed_topics))
+            topic_boost = f"CASE WHEN i.topic IN ({placeholders}) THEN 0.30 ELSE 0.0 END"
+            params = [user_id] + followed_topics + [limit, offset]
+        else:
+            topic_boost = "0.0"
+            params = [user_id, limit, offset]
+
+        # SQL-level scoring with database-side calculations
+        query = f"""
+        WITH scored_insights AS (
             SELECT
-                id, topic, category, text, source_url, source_domain,
-                quality_score, engagement_score, created_at
-            FROM insights
-            WHERE is_archived = 0
-        """)
+                i.id, i.topic, i.category, i.text, i.source_url, i.source_domain,
+                i.quality_score, i.engagement_score, i.created_at,
+                -- Composite score calculated in SQL
+                (
+                    (i.quality_score / 10.0 * 0.20) +              -- Base quality (20%)
+                    (i.engagement_score * 0.15) +                   -- Social proof (15%)
+                    ({topic_boost}) +                               -- Topic affinity (30%)
+                    (MAX(0, 1.0 - (julianday('now') - julianday(i.created_at)) / 30.0) * 0.20)  -- Freshness (20%)
+                ) as predicted_score
+            FROM insights i
+            LEFT JOIN user_engagement ue ON
+                i.id = ue.insight_id AND
+                ue.user_id = ? AND
+                ue.action = 'view'
+            WHERE i.is_archived = 0
+            AND ue.insight_id IS NULL  -- Exclude seen insights
+            GROUP BY i.id
+            ORDER BY predicted_score DESC
+            LIMIT ? OFFSET ?
+        )
+        SELECT * FROM scored_insights
+        """
 
-        all_insights = [dict(row) for row in cursor.fetchall()]
+        cursor.execute(query, params)
 
-        # Filter out already seen
-        seen_ids = self._get_seen_insight_ids(user_id, cursor)
-        unseen = [i for i in all_insights if i['id'] not in seen_ids]
-
-        # Predict engagement for each
-        for insight in unseen:
-            insight['predicted_score'] = self.scorer.predict_engagement(
-                user_id,
-                insight,
-                cursor=cursor
-            )
-
-        # Sort by prediction
-        ranked = sorted(unseen, key=lambda x: x['predicted_score'], reverse=True)
-
-        # Paginate
-        result = ranked[offset:offset + limit]
+        results = [dict(row) for row in cursor.fetchall()]
 
         # Mark as viewed
-        if result:
-            self._mark_viewed(user_id, [i['id'] for i in result], cursor)
+        if results:
+            self._mark_viewed(user_id, [r['id'] for r in results], cursor)
             conn.commit()
 
         conn.close()
-        return result
+        return results
 
     def record_engagement(
         self,

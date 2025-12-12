@@ -29,14 +29,28 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for backend and Playwright/Chromium
 RUN apt-get update && apt-get install -y \
     gcc \
+    wget \
+    ca-certificates \
+    fonts-liberation \
+    libnss3 \
+    libxss1 \
+    libappindicator3-1 \
+    libasound2 \
+    libgbm1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies (backend only - no heavy automation packages)
 COPY requirements-backend.txt .
 RUN pip install --no-cache-dir -r requirements-backend.txt
+
+# Install Playwright browsers for crawl4ai
+RUN crawl4ai-setup
+
+# Set environment variable to suppress tokenizers parallelism warning
+ENV TOKENIZERS_PARALLELISM=false
 
 # Copy application code
 COPY automation/ ./automation/
@@ -49,6 +63,9 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Initialize database
 RUN python db/init_db.py || true
+
+# Apply performance indexes migration
+RUN python db/apply_migration.py 003_performance_indexes.sql || true
 
 # Expose port
 EXPOSE 8000
