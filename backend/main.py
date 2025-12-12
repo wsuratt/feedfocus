@@ -12,7 +12,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from automation.semantic_db import search_insights
-from automation.topic_handler import process_topic
 from backend.extraction_queue import ExtractionQueue
 from backend.semantic_search import find_similar_topic, get_topic_insight_count
 from backend.topic_validation import validate_topic
@@ -126,6 +125,9 @@ def run_extraction(topic: str, user_id: str) -> dict:
         Dict with extraction results
     """
     try:
+        # Lazy import - only load when actually running extraction
+        from automation.topic_handler import process_topic
+
         # Run async process_topic in sync context
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

@@ -24,3 +24,8 @@ transformers>=4.40.0
 torch>=2.0.0
 sentencepiece>=0.1.99  # For Llama tokenizer
 accelerate>=0.20.0  # For optimized model loading
+
+# Automation/Extraction dependencies (lazy loaded when extraction runs)
+anthropic>=0.18.0  # Claude API for query generation and extraction
+duckduckgo-search>=4.0.0  # Source discovery
+crawl4ai>=0.3.0  # Web content fetching
