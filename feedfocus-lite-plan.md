@@ -132,47 +132,204 @@ boto3>=1.28.0  # AWS SDK for SES
 
 ---
 
-## Phase 3: Lightweight Frontend (30 min)
+## Phase 3: Lite Frontend App (30 min)
 
-### 3.1 Static HTML Page
+### 3.1 Create Separate Vite App
 
-**File:** `feedfocus/frontend/lite.html` (standalone, no React)
+**Structure:**
+```
+feedfocus/
+├── frontend/          # Main app (keep for later)
+└── frontend-lite/     # NEW - Lite landing page
+    ├── src/
+    │   ├── App.tsx
+    │   ├── main.tsx
+    │   └── index.css
+    ├── index.html
+    ├── package.json
+    ├── vite.config.ts
+    ├── tailwind.config.js
+    ├── tsconfig.json
+    └── .env
+```
+
+**Tech Stack:** React 18 + TypeScript + Vite + Tailwind (same as main app)
 
 **Features:**
-- Clean, modern design (Tailwind CDN for styling)
-- Topic input with autocomplete (popular topics)
-- Email validation (client-side)
-- Loading state during submission
-- Success/queued message display
-- No navigation, no auth, single purpose
+- Single page, no routing
+- Topic input with autocomplete
+- Email validation
+- Loading states
+- Success/queued messages
 - Mobile responsive
-- Fast load time (<1s)
+- Fast load (<1s)
 
-**Served from Backend:**
-```python
-# backend/main.py
-@app.get("/lite")
-async def serve_lite_page():
-    return FileResponse("frontend/lite.html")
-```
+### 3.2 Setup Frontend-Lite
 
-### 3.2 Form Submission
-
-**Implementation:** Vanilla JavaScript (no framework)
-
-```javascript
-// Example structure
-async function handleSubmit(email, topic) {
-  const response = await fetch('/api/lite/submit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, topic })
-  });
-
-  const data = await response.json();
-  // Show success message based on data.status
+**Create package.json:**
+```json
+{
+  "name": "feedfocus-lite",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.263.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.0.2",
+    "vite": "^4.4.5"
+  }
 }
 ```
+
+**Create App.tsx:**
+```typescript
+import { useState } from 'react';
+import { Mail, Sparkles, CheckCircle, Clock } from 'lucide-react';
+
+export default function App() {
+  const [formData, setFormData] = useState({ email: '', topic: '' });
+  const [status, setStatus] = useState<'idle' | 'loading' | 'immediate' | 'queued'>('idle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatus('loading');
+
+    try {
+      const response = await fetch('/api/lite/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await response.json();
+      setStatus(data.status);
+    } catch (error) {
+      console.error('Submission failed:', error);
+      setStatus('idle');
+    }
+  };
+
+  if (status === 'immediate' || status === 'queued') {
+    return <SuccessScreen status={status} email={formData.email} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+        <div className="text-center mb-8">
+          <Sparkles className="w-12 h-12 text-indigo-600 mx-auto mb-4" />
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Get Curated Insights
+          </h1>
+          <p className="text-gray-600">
+            Enter any topic, get the best insights in your inbox
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Topic
+            </label>
+            <input
+              type="text"
+              value={formData.topic}
+              onChange={(e) => setFormData({...formData, topic: e.target.value})}
+              placeholder="e.g. AI agents, productivity, startups"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              placeholder="you@example.com"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={status === 'loading'}
+            className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-medium"
+          >
+            {status === 'loading' ? 'Submitting...' : 'Get Insights'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function SuccessScreen({ status, email }: { status: 'immediate' | 'queued', email: string }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+        {status === 'immediate' ? (
+          <>
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Check Your Email!</h2>
+            <p className="text-gray-600 mb-4">
+              We just sent your insights to <strong>{email}</strong>
+            </p>
+          </>
+        ) : (
+          <>
+            <Clock className="w-16 h-16 text-indigo-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">We're On It!</h2>
+            <p className="text-gray-600 mb-4">
+              You'll get insights within 2 hours at <strong>{email}</strong>
+            </p>
+          </>
+        )}
+        <p className="text-sm text-gray-500">
+          Want weekly updates? Just reply to the email.
+        </p>
+      </div>
+    </div>
+  );
+}
+```
+
+### 3.3 Configuration Files
+
+**vite.config.ts:**
+```typescript
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000'
+    }
+  }
+});
+```
+
+**tailwind.config.js, tsconfig.json, etc.** - Copy from main frontend
 
 ---
 
@@ -250,34 +407,143 @@ ALTER TABLE lite_leads ADD COLUMN
 
 ## Phase 6: Deployment (20 min)
 
-### 6.1 Same EC2 Instance
+### 6.1 Modify Docker Compose
 
-**Steps:**
-1. Deploy `lite.html` to frontend folder
-2. Backend updates via `git pull`
-3. Run migration: `python db/apply_migration.py 005_lite_leads.sql`
-4. Configure AWS SES credentials in `.env`
-5. Install `boto3`: `pip install boto3`
-6. Restart backend: `sudo systemctl restart feedfocus`
+**Update `docker-compose.yml` to build frontend-lite instead:**
 
-### 6.2 Nginx Configuration
+```yaml
+# Comment out main frontend (for later)
+# frontend:
+#   build:
+#     context: ./frontend
+#   volumes:
+#     - ./frontend/dist:/app/dist
 
-**Add route for `/lite`:**
-```nginx
-location /lite {
-    proxy_pass http://127.0.0.1:8000/lite;
-}
+# Add frontend-lite
+frontend-lite:
+  build:
+    context: ./frontend-lite
+    dockerfile: ../frontend/Dockerfile  # Reuse same Dockerfile
+  volumes:
+    - ./frontend-lite/dist:/app/dist
+  environment:
+    - VITE_API_URL=https://api.feed-focus.com
 ```
 
-### 6.3 DNS Options
+**Or simpler - just change the context in existing service:**
+```yaml
+frontend:
+  build:
+    context: ./frontend-lite  # Changed from ./frontend
+  volumes:
+    - ./frontend-lite/dist:/app/dist
+  environment:
+    - VITE_API_URL=https://api.feed-focus.com
+```
 
-**Option 1:** Subdomain
-- `try.feedfocus.com` → `/lite`
-- Clean, memorable URL
+### 6.2 Update GitHub Actions
 
-**Option 2:** Path
-- `feedfocus.com/lite`
-- Simpler setup
+**Modify `.github/workflows/deploy-aws-ec2.yml`:**
+
+```yaml
+# Change frontend build section
+- name: Build frontend on host
+  script: |
+    # ... existing setup ...
+
+    # Build frontend-lite instead
+    cd frontend-lite  # Changed from frontend
+
+    # Create .env for build
+    echo "VITE_API_URL=https://api.feed-focus.com" > .env
+
+    # Remove old dist
+    sudo rm -rf dist
+
+    # Build
+    npm ci
+    npm run build
+
+    # Fix ownership
+    sudo chown -R ubuntu:ubuntu dist
+    cd ..
+
+    # Restart containers
+    sudo docker-compose restart
+```
+
+### 6.3 Deployment Steps
+
+**On Local:**
+```bash
+cd feedfocus
+
+# Create frontend-lite
+mkdir frontend-lite
+cd frontend-lite
+
+# Copy config from main frontend
+cp ../frontend/package.json .
+cp ../frontend/vite.config.ts .
+cp ../frontend/tailwind.config.js .
+cp ../frontend/tsconfig.json .
+cp ../frontend/postcss.config.js .
+
+# Modify package.json name
+# Add src/App.tsx, src/main.tsx, etc.
+
+# Commit and push
+git add frontend-lite
+git commit -m "feat: add feedfocus lite landing page"
+git push origin main
+```
+
+**GitHub Actions will automatically:**
+1. Pull latest code
+2. Build frontend-lite
+3. Restart containers
+
+**Then SSH to EC2:**
+```bash
+ssh your-ec2-instance
+cd feedfocus
+
+# Run migration
+python3 db/apply_migration.py 005_lite_leads.sql
+
+# Configure AWS SES in .env
+nano .env
+# Add:
+# AWS_REGION=us-east-1
+# AWS_ACCESS_KEY_ID=your_key
+# AWS_SECRET_ACCESS_KEY=your_secret
+# FROM_EMAIL=insights@feedfocus.app
+
+# Restart backend to pick up new env vars
+sudo docker-compose restart backend
+```
+
+### 6.4 DNS Configuration
+
+**Frontend serves from root:**
+- `feedfocus.com` → frontend-lite (landing page)
+- `feedfocus.com/api/*` → backend API
+
+**No additional nginx config needed** - existing setup works
+
+### 6.5 Rollback to Main Frontend Later
+
+**When ready to deploy full app:**
+```yaml
+# In docker-compose.yml
+frontend:
+  build:
+    context: ./frontend  # Change back
+  volumes:
+    - ./frontend/dist:/app/dist
+```
+
+Push and GitHub Actions will rebuild with main frontend.
 
 ---
 
@@ -293,15 +559,22 @@ feedfocus/
 ├── db/
 │   └── migrations/
 │       └── 005_lite_leads.sql     # NEW - Lead tracking table
-├── frontend/
-│   └── lite.html                  # NEW - Standalone landing page
+├── frontend/                      # Main app (commented out in docker-compose for now)
+│   └── ...
+├── frontend-lite/                 # NEW - Lite landing page
+│   ├── src/
+│   │   ├── App.tsx               # Main component
+│   │   ├── main.tsx              # Entry point
+│   │   └── index.css             # Global styles
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   └── tsconfig.json
 ├── .env                           # Add AWS_* environment variables
-└── requirements-backend.txt       # Add boto3
-```
-
----
-
-## Implementation Timeline
+├── docker-compose.yml             # Modified to build frontend-lite
+└── .github/workflows/
+    └── deploy-aws-ec2.yml         # Modified to build frontend-lite
 
 | Phase | Task | Time | Status |
 |-------|------|------|--------|
