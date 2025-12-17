@@ -803,6 +803,91 @@ async def record_feed_engagement(
         raise HTTPException(status_code=500, detail=f"Failed to record engagement: {str(e)}")
 
 
+class DwellEvent(BaseModel):
+    insightId: str
+    dwellMs: int  # Weighted dwell time in milliseconds
+
+
+class DwellBatch(BaseModel):
+    events: List[DwellEvent]
+
+
+@app.post("/api/feed/dwell-batch")
+async def record_dwell_batch(
+    batch: DwellBatch,
+    user_id: str = Depends(verify_token) if AUTH_ENABLED else "default"
+):
+    """
+    Process batch of weighted dwell events.
+    Updates topic affinities based on engagement signals.
+
+    Requires authentication. User ID is extracted from JWT token.
+    """
+    from backend.services.user_profile_service import UserProfileService
+
+    if not batch.events:
+        return {"processed": 0}
+
+    # OPTIMIZATION: Batch load all insights in one query (not N queries)
+    insight_ids = [e.insightId for e in batch.events]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    placeholders = ','.join('?' * len(insight_ids))
+    cursor.execute(f"""
+        SELECT id, topic, text FROM insights
+        WHERE id IN ({placeholders})
+    """, insight_ids)
+
+    # Build lookup map
+    insights_map = {}
+    for row in cursor.fetchall():
+        insights_map[row['id']] = {"topic": row['topic'], "text": row['text']}
+    conn.close()
+
+    # Process each event
+    processed = 0
+    profile_service = UserProfileService(DB_PATH)
+
+    for event in batch.events:
+        try:
+            insight = insights_map.get(event.insightId)
+            if not insight:
+                continue
+
+            topic = insight["topic"]
+            text = insight["text"]
+
+            # Expected dwell: ~20ms per character, min 2s, max 30s
+            content_length = len(text)
+            expected_dwell = min(max(content_length * 20, 2000), 30000)
+
+            # Signal: 1.0 = met expectations, >1 = high interest, <1 = low
+            engagement_signal = event.dwellMs / expected_dwell
+
+            # Clamp to reasonable range (0.2 - 2.0)
+            engagement_signal = min(max(engagement_signal, 0.2), 2.0)
+
+            # Convert signal to affinity delta
+            if engagement_signal >= 1.0:
+                # High dwell = positive signal
+                delta = min((engagement_signal - 1.0) * 0.05, 0.05)  # Max +0.05
+            else:
+                # Low dwell = negative signal
+                delta = max((engagement_signal - 1.0) * 0.02, -0.02)  # Max -0.02
+
+            # Update topic affinity
+            if delta != 0:
+                profile_service.update_topic_affinity(user_id, topic, delta)
+                processed += 1
+
+        except Exception as e:
+            logger.error(f"Error processing dwell event for {event.insightId}: {e}")
+            continue
+
+    return {"processed": processed, "total": len(batch.events)}
+
+
 class TopicFollow(BaseModel):
     topic: str
 
