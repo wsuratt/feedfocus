@@ -147,7 +147,7 @@ class FeedService:
         if viewed_ids:
             placeholders = ','.join('?' * len(viewed_ids))
             exclusion_clause = f"AND i.id NOT IN ({placeholders})"
-            params = [candidate_pool_size] + viewed_ids
+            params = viewed_ids + [candidate_pool_size]
         else:
             exclusion_clause = ""
             params = [candidate_pool_size]
