@@ -115,73 +115,77 @@ class FeedService:
         offset: int = 0
     ) -> List[Dict]:
         """
-        Generate For You feed - algorithmic recommendations from ALL topics
-        Optimized with database-level scoring and pagination
+        Generate For You feed using v2 algorithm with personalized scoring
+        and diversity-aware composition.
 
         Args:
             user_id: User identifier
             limit: Number of insights to return
-            offset: Pagination offset
+            offset: Pagination offset (not used in v2 - loads larger pool)
 
         Returns:
             List of ranked insights with metadata
         """
+        from backend.services.feed_builder import FeedBuilder
+
         conn = self.get_db_connection()
         cursor = conn.cursor()
 
-        # Get user's followed topics for affinity boost
+        # Get candidate pool (200 insights, pre-filtered by SQL)
+        # This is larger than requested to allow diversity filtering
+        candidate_pool_size = min(200, limit * 4)
+
+        # Get viewed insights to exclude
         cursor.execute("""
-            SELECT topic FROM user_topics WHERE user_id = ?
+            SELECT DISTINCT insight_id
+            FROM user_engagement
+            WHERE user_id = ? AND action = 'view'
         """, (user_id,))
-        followed_topics = [row['topic'] for row in cursor.fetchall()]
+        viewed_ids = [row['insight_id'] for row in cursor.fetchall()]
 
-        # Build CASE statement for topic affinity
-        if followed_topics:
-            placeholders = ','.join('?' * len(followed_topics))
-            topic_boost = f"CASE WHEN i.topic IN ({placeholders}) THEN 0.30 ELSE 0.0 END"
-            params = [user_id] + followed_topics + [limit, offset]
+        # Build exclusion list for SQL
+        if viewed_ids:
+            placeholders = ','.join('?' * len(viewed_ids))
+            exclusion_clause = f"AND i.id NOT IN ({placeholders})"
+            params = [candidate_pool_size] + viewed_ids
         else:
-            topic_boost = "0.0"
-            params = [user_id, limit, offset]
+            exclusion_clause = ""
+            params = [candidate_pool_size]
 
-        # SQL-level scoring with database-side calculations
+        # Fetch candidate pool with basic quality filtering
         query = f"""
-        WITH scored_insights AS (
             SELECT
                 i.id, i.topic, i.category, i.text, i.source_url, i.source_domain,
-                i.quality_score, i.engagement_score, i.created_at,
-                -- Composite score calculated in SQL
-                (
-                    (i.quality_score / 10.0 * 0.20) +              -- Base quality (20%)
-                    (i.engagement_score * 0.15) +                   -- Social proof (15%)
-                    ({topic_boost}) +                               -- Topic affinity (30%)
-                    (MAX(0, 1.0 - (julianday('now') - julianday(i.created_at)) / 30.0) * 0.20)  -- Freshness (20%)
-                ) as predicted_score
+                i.quality_score, i.engagement_score, i.created_at, i.chroma_id
             FROM insights i
-            LEFT JOIN user_engagement ue ON
-                i.id = ue.insight_id AND
-                ue.user_id = ? AND
-                ue.action = 'view'
             WHERE i.is_archived = 0
-            AND ue.insight_id IS NULL  -- Exclude seen insights
-            GROUP BY i.id
-            ORDER BY predicted_score DESC
-            LIMIT ? OFFSET ?
-        )
-        SELECT * FROM scored_insights
+              AND i.quality_score >= 5
+              {exclusion_clause}
+            ORDER BY i.quality_score DESC, i.created_at DESC
+            LIMIT ?
         """
 
         cursor.execute(query, params)
-
-        results = [dict(row) for row in cursor.fetchall()]
-
-        # Mark as viewed
-        if results:
-            self._mark_viewed(user_id, [r['id'] for r in results], cursor)
-            conn.commit()
+        candidates = [dict(row) for row in cursor.fetchall()]
 
         conn.close()
-        return results
+
+        if not candidates:
+            return []
+
+        # Use FeedBuilder for personalized scoring and diversity
+        builder = FeedBuilder(self.db_path)
+        feed = builder.build_feed(user_id, candidates, length=limit)
+
+        # Mark as viewed
+        if feed:
+            conn = self.get_db_connection()
+            cursor = conn.cursor()
+            self._mark_viewed(user_id, [insight['id'] for insight in feed], cursor)
+            conn.commit()
+            conn.close()
+
+        return feed
 
     def record_engagement(
         self,
@@ -190,15 +194,28 @@ class FeedService:
         action: str
     ):
         """
-        Record user engagement with an insight
+        Record user engagement with an insight and update topic affinities
 
         Args:
             user_id: User identifier
             insight_id: Insight ID
             action: 'view', 'like', 'save', 'dismiss'
         """
+        from backend.services.user_profile_service import UserProfileService
+
         conn = self.get_db_connection()
         cursor = conn.cursor()
+
+        # Get insight topic for affinity updates
+        cursor.execute("""
+            SELECT topic FROM insights WHERE id = ?
+        """, (insight_id,))
+        row = cursor.fetchone()
+        topic = row['topic'] if row else None
+
+        # Track whether action is being added or removed
+        affinity_delta = 0.0
+        action_applied = False
 
         # For like/save actions, check if already exists and toggle
         if action in ['like', 'save']:
@@ -214,6 +231,9 @@ class FeedService:
                     DELETE FROM user_engagement
                     WHERE user_id = ? AND insight_id = ? AND action = ?
                 """, (user_id, insight_id, action))
+                action_applied = False
+                # Negative delta when removing
+                affinity_delta = -0.15 if action == 'like' else -0.12
             else:
                 # Doesn't exist, add it (toggle on)
                 engagement_id = str(uuid.uuid4())
@@ -221,24 +241,45 @@ class FeedService:
                     INSERT INTO user_engagement (id, user_id, insight_id, action, created_at)
                     VALUES (?, ?, ?, ?, ?)
                 """, (engagement_id, user_id, insight_id, action, datetime.now().isoformat()))
+                action_applied = True
+                # Positive delta when adding
+                affinity_delta = 0.15 if action == 'like' else 0.12
         else:
             # For view/dismiss, just insert
             engagement_id = str(uuid.uuid4())
             cursor.execute("""
-                INSERT INTO user_engagement (id, user_id, insight_id, action, created_at)
+                INSERT OR IGNORE INTO user_engagement (id, user_id, insight_id, action, created_at)
                 VALUES (?, ?, ?, ?, ?)
             """, (engagement_id, user_id, insight_id, action, datetime.now().isoformat()))
+            action_applied = True
+            # Small negative for dismiss, no change for view
+            affinity_delta = -0.10 if action == 'dismiss' else 0.0
 
         conn.commit()
 
-        # Update engagement score asynchronously (simple version for now)
+        # Update insight engagement score
         self._update_insight_engagement_score(insight_id, cursor)
         conn.commit()
+
+        # Update user profile counts
+        profile_service = UserProfileService(self.db_path)
+        if action == 'view':
+            profile_service.increment_view_count(user_id)
+        elif action == 'like' and action_applied:
+            profile_service.increment_like_count(user_id)
+        elif action == 'save' and action_applied:
+            profile_service.increment_save_count(user_id)
+
+        # Update topic affinity if we have a topic and delta
+        if topic and affinity_delta != 0.0:
+            profile_service.update_topic_affinity(user_id, topic, affinity_delta)
 
         conn.close()
 
     def follow_topic(self, user_id: str, topic: str):
-        """Add topic to user's following list"""
+        """Add topic to user's following list and create affinity"""
+        from backend.services.user_profile_service import UserProfileService
+
         conn = self.get_db_connection()
         cursor = conn.cursor()
 
@@ -248,6 +289,30 @@ class FeedService:
         """, (user_id, topic, datetime.now().isoformat()))
 
         conn.commit()
+        conn.close()
+
+        # Create or boost topic affinity (0.70 for followed topics)
+        profile_service = UserProfileService(self.db_path)
+        conn = self.get_db_connection()
+        cursor = conn.cursor()
+
+        # Check if affinity exists
+        cursor.execute("""
+            SELECT affinity_score FROM user_topic_affinities
+            WHERE user_id = ? AND topic = ?
+        """, (user_id, topic))
+        row = cursor.fetchone()
+
+        if row:
+            # Update existing affinity to at least 0.70
+            current = row['affinity_score']
+            if current < 0.70:
+                delta = 0.70 - current
+                profile_service.update_topic_affinity(user_id, topic, delta)
+        else:
+            # Create new affinity at 0.70
+            profile_service.update_topic_affinity(user_id, topic, 0.20)  # +0.20 from default 0.5 = 0.70
+
         conn.close()
 
     def unfollow_topic(self, user_id: str, topic: str):
