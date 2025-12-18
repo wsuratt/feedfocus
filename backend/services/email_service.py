@@ -172,13 +172,14 @@ FeedFocus · Curated insights delivered to your inbox
 Unsubscribe: https://feed-focus.com/unsubscribe?token={sub_token}
         """
 
-    def get_top_insights(self, topic: str, limit: int = 10) -> List[Dict]:
+    def get_top_insights(self, topic: str, limit: int = 10, email: str = None) -> List[Dict]:
         """
         Get top quality insights for a topic from database.
 
         Args:
             topic: Topic name
             limit: Number of insights to return (default 10)
+            email: Optional email to exclude already-sent insights
 
         Returns:
             List of insight dicts
@@ -187,15 +188,48 @@ Unsubscribe: https://feed-focus.com/unsubscribe?token={sub_token}
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT id, text, source_url, source_domain, quality_score, category
-            FROM insights
-            WHERE topic = ?
-              AND is_archived = 0
-              AND quality_score >= 7
-            ORDER BY quality_score DESC, engagement_score DESC
-            LIMIT ?
-        """, (topic, limit))
+        if email:
+            cursor.execute("""
+                SELECT DISTINCT insight_id
+                FROM lite_sent_insights
+                WHERE email = ? AND topic = ?
+            """, (email, topic))
+            sent_ids = [row['insight_id'] for row in cursor.fetchall()]
+
+            if sent_ids:
+                placeholders = ','.join('?' * len(sent_ids))
+                query = f"""
+                    SELECT id, text, source_url, source_domain, quality_score, category
+                    FROM insights
+                    WHERE topic = ?
+                      AND is_archived = 0
+                      AND quality_score >= 7
+                      AND id NOT IN ({placeholders})
+                    ORDER BY quality_score DESC, engagement_score DESC
+                    LIMIT ?
+                """
+                params = [topic] + sent_ids + [limit]
+                cursor.execute(query, params)
+            else:
+                cursor.execute("""
+                    SELECT id, text, source_url, source_domain, quality_score, category
+                    FROM insights
+                    WHERE topic = ?
+                      AND is_archived = 0
+                      AND quality_score >= 7
+                    ORDER BY quality_score DESC, engagement_score DESC
+                    LIMIT ?
+                """, (topic, limit))
+        else:
+            cursor.execute("""
+                SELECT id, text, source_url, source_domain, quality_score, category
+                FROM insights
+                WHERE topic = ?
+                  AND is_archived = 0
+                  AND quality_score >= 7
+                ORDER BY quality_score DESC, engagement_score DESC
+                LIMIT ?
+            """, (topic, limit))
 
         insights = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -229,17 +263,25 @@ Unsubscribe: https://feed-focus.com/unsubscribe?token={sub_token}
 
         return lead_id
 
-    def mark_email_sent(self, email: str, topic: str, insights_count: int):
-        """Mark that email was sent for a lead"""
+    def mark_email_sent(self, email: str, topic: str, insights: List[Dict]):
+        """Mark that email was sent for a lead and track which insights were sent"""
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        now = datetime.now().isoformat()
 
         cursor.execute("""
             UPDATE lite_leads
             SET email_sent_at = ?,
-                insights_sent = ?
+                insights_sent = insights_sent + ?
             WHERE email = ? AND topic = ?
-        """, (datetime.now().isoformat(), insights_count, email, topic))
+        """, (now, len(insights), email, topic))
+
+        for insight in insights:
+            cursor.execute("""
+                INSERT OR IGNORE INTO lite_sent_insights
+                (email, topic, insight_id, sent_at)
+                VALUES (?, ?, ?, ?)
+            """, (email, topic, insight['id'], now))
 
         conn.commit()
         conn.close()

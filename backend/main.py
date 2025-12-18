@@ -1606,20 +1606,21 @@ async def submit_lite_request(submission: LiteSubmission):
         if len(topic) < 2:
             raise HTTPException(status_code=400, detail="Topic too short")
 
-        # Check if topic has enough quality insights
-        insights = email_service.get_top_insights(topic, limit=10)
+        # Check if topic has enough quality insights (exclude already sent)
+        insights = email_service.get_top_insights(topic, limit=10, email=submission.email)
 
         if len(insights) >= 5:
             # Immediate: Send email now
+            insights_to_send = insights[:10]
             success = email_service.send_insights_email(
                 submission.email,
                 topic,
-                insights[:10]  # Top 10 insights
+                insights_to_send
             )
 
             if success:
                 email_service.record_lead(submission.email, topic, status='immediate')
-                email_service.mark_email_sent(submission.email, topic, len(insights[:10]))
+                email_service.mark_email_sent(submission.email, topic, insights_to_send)
 
                 return {
                     "status": "immediate",
