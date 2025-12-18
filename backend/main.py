@@ -1654,6 +1654,94 @@ async def submit_lite_request(submission: LiteSubmission):
         raise HTTPException(status_code=500, detail="Submission failed")
 
 
+@app.get("/api/lite/subscribe")
+async def subscribe_to_weekly(token: str):
+    """
+    Subscribe user to weekly insights using their token.
+    Called when user clicks subscribe link in email.
+    """
+    try:
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+        DB_PATH = os.path.join(PROJECT_ROOT, "insights.db")
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE lite_leads
+            SET subscribed = 1
+            WHERE subscription_token = ?
+        """, (token,))
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Invalid subscription token")
+
+        cursor.execute("""
+            SELECT email, topic FROM lite_leads
+            WHERE subscription_token = ?
+        """, (token,))
+        result = cursor.fetchone()
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "status": "subscribed",
+            "message": f"You're subscribed to weekly {result[1]} insights at {result[0]}!",
+            "email": result[0],
+            "topic": result[1]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Subscription failed: {e}")
+        raise HTTPException(status_code=500, detail="Subscription failed")
+
+
+@app.get("/api/lite/unsubscribe")
+async def unsubscribe_from_weekly(token: str):
+    """
+    Unsubscribe user from weekly insights using their token.
+    Called when user clicks unsubscribe link in email.
+    """
+    try:
+        PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+        DB_PATH = os.path.join(PROJECT_ROOT, "insights.db")
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE lite_leads
+            SET subscribed = 0, unsubscribed_at = ?
+            WHERE subscription_token = ?
+        """, (datetime.now().isoformat(), token))
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Invalid subscription token")
+
+        cursor.execute("""
+            SELECT email, topic FROM lite_leads
+            WHERE subscription_token = ?
+        """, (token,))
+        result = cursor.fetchone()
+
+        conn.commit()
+        conn.close()
+
+        return {
+            "status": "unsubscribed",
+            "message": f"You've been unsubscribed from {result[1]} insights.",
+            "email": result[0],
+            "topic": result[1]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unsubscribe failed: {e}")
+        raise HTTPException(status_code=500, detail="Unsubscribe failed")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

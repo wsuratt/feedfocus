@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS lite_leads (
     created_at TEXT NOT NULL,
     email_sent_at TEXT,
     conversion_source TEXT DEFAULT 'lite_landing',
+    subscription_token TEXT,
+    subscribed BOOLEAN DEFAULT 0,
+    unsubscribed_at TEXT,
     UNIQUE(email, topic)
 );
 

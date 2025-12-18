@@ -1,6 +1,7 @@
 """Email Service for FeedFocus Lite using AWS SES"""
 import os
 import sqlite3
+import secrets
 from typing import List, Dict
 from datetime import datetime
 
@@ -48,9 +49,10 @@ class EmailService:
             print(f"⚠️  AWS SES not configured. Would send email to {email} about {topic}")
             return False
 
+        sub_token = self._generate_subscription_token(email, topic)
         subject = f"Your {topic} insights are ready"
-        html_body = self._build_email_html(topic, insights)
-        text_body = self._build_email_text(topic, insights)
+        html_body = self._build_email_html(topic, insights, sub_token)
+        text_body = self._build_email_text(topic, insights, sub_token)
 
         try:
             response = self.ses_client.send_email(
@@ -71,7 +73,23 @@ class EmailService:
             print(f"❌ Failed to send email: {e.response['Error']['Message']}")
             return False
 
-    def _build_email_html(self, topic: str, insights: List[Dict]) -> str:
+    def _generate_subscription_token(self, email: str, topic: str) -> str:
+        """Generate and store a unique subscription token"""
+        token = secrets.token_urlsafe(32)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE lite_leads
+            SET subscription_token = ?
+            WHERE email = ? AND topic = ?
+        """, (token, email, topic))
+
+        conn.commit()
+        conn.close()
+        return token
+
+    def _build_email_html(self, topic: str, insights: List[Dict], sub_token: str) -> str:
         """Build HTML email body"""
         insights_html = ""
         for i, insight in enumerate(insights, 1):
@@ -108,24 +126,30 @@ class EmailService:
 
                 <div style="margin-top: 40px; padding: 24px; background: #eff6ff; border-radius: 8px; text-align: center;">
                     <p style="margin: 0 0 16px 0; font-size: 16px; color: #1e293b;">
-                        Want weekly updates?
+                        Want weekly {topic} insights?
                     </p>
-                    <p style="margin: 0; font-size: 14px; color: #64748b;">
-                        Reply to this email with "YES" and we'll send you fresh insights every week
+                    <a href="https://feed-focus.com/subscribe?token={sub_token}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500; margin-bottom: 12px;">
+                        Subscribe to Weekly Updates
+                    </a>
+                    <p style="margin: 12px 0 0 0; font-size: 12px; color: #64748b;">
+                        We'll send you fresh {topic} insights every week
                     </p>
                 </div>
 
                 <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; text-align: center;">
-                    <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                    <p style="margin: 0 0 8px 0; font-size: 12px; color: #94a3b8;">
                         FeedFocus · Curated insights delivered to your inbox
                     </p>
+                    <a href="https://feed-focus.com/unsubscribe?token={sub_token}" style="color: #94a3b8; text-decoration: none; font-size: 11px;">
+                        Unsubscribe
+                    </a>
                 </div>
             </div>
         </body>
         </html>
         """
 
-    def _build_email_text(self, topic: str, insights: List[Dict]) -> str:
+    def _build_email_text(self, topic: str, insights: List[Dict], sub_token: str) -> str:
         """Build plain text email body"""
         insights_text = ""
         for i, insight in enumerate(insights, 1):
@@ -140,11 +164,12 @@ Your {topic} Insights
 
 {'=' * 50}
 
-Want weekly updates?
-Reply to this email with "YES" and we'll send you fresh insights every week.
+Want weekly {topic} insights?
+Subscribe: https://feed-focus.com/subscribe?token={sub_token}
 
 ---
 FeedFocus · Curated insights delivered to your inbox
+Unsubscribe: https://feed-focus.com/unsubscribe?token={sub_token}
         """
 
     def get_top_insights(self, topic: str, limit: int = 10) -> List[Dict]:
