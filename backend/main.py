@@ -1573,6 +1573,87 @@ async def get_bookmarked_insights(
         raise HTTPException(status_code=500, detail=f"Failed to get bookmarked insights: {str(e)}")
 
 
+# ============================================================================
+# FeedFocus Lite: Landing page lead capture
+# ============================================================================
+
+class LiteSubmission(BaseModel):
+    email: str
+    topic: str
+
+@app.post("/api/lite/submit")
+async def submit_lite_request(submission: LiteSubmission):
+    """
+    FeedFocus Lite: Submit topic request and get insights via email.
+
+    Flow:
+    1. Check if topic has >=5 quality insights
+    2. If yes: Send email immediately, return 'immediate'
+    3. If no: Queue extraction, return 'queued'
+    """
+    try:
+        from backend.services.email_service import EmailService
+
+        email_service = EmailService()
+
+        # Validate email format
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, submission.email):
+            raise HTTPException(status_code=400, detail="Invalid email format")
+
+        # Normalize topic
+        topic = submission.topic.lower().strip()
+        if len(topic) < 2:
+            raise HTTPException(status_code=400, detail="Topic too short")
+
+        # Check if topic has enough quality insights
+        insights = email_service.get_top_insights(topic, limit=10)
+
+        if len(insights) >= 5:
+            # Immediate: Send email now
+            success = email_service.send_insights_email(
+                submission.email,
+                topic,
+                insights[:10]  # Top 10 insights
+            )
+
+            if success:
+                email_service.record_lead(submission.email, topic, status='immediate')
+                email_service.mark_email_sent(submission.email, topic, len(insights[:10]))
+
+                return {
+                    "status": "immediate",
+                    "message": f"Email sent! Check {submission.email} for your {topic} insights.",
+                    "insights_count": len(insights[:10])
+                }
+            else:
+                # Email failed but we have insights - record as pending
+                email_service.record_lead(submission.email, topic, status='pending')
+                return {
+                    "status": "queued",
+                    "message": "We'll send your insights within 2 hours.",
+                    "insights_count": 0
+                }
+        else:
+            # Queued: Need to extract insights first
+            email_service.record_lead(submission.email, topic, status='queued')
+
+            # TODO: Queue extraction job with callback to send email when done
+            # For now, just record the lead
+
+            return {
+                "status": "queued",
+                "message": f"We're gathering insights on {topic}. You'll get an email within 2 hours.",
+                "insights_count": len(insights)
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Lite submission failed: {e}")
+        raise HTTPException(status_code=500, detail="Submission failed")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
