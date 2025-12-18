@@ -15,6 +15,10 @@ services:
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - ENABLE_POST_COLLECTION_FILTER=true
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - FROM_EMAIL=${FROM_EMAIL}
     volumes:
       - ./insights.db:/app/insights.db
       - ./chroma_db:/app/chroma_db
