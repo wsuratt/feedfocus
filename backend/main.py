@@ -1639,8 +1639,12 @@ async def submit_lite_request(submission: LiteSubmission):
             # Queued: Need to extract insights first
             email_service.record_lead(submission.email, topic, status='queued')
 
-            # TODO: Queue extraction job with callback to send email when done
-            # For now, just record the lead
+            # Queue extraction job
+            try:
+                job_id = extraction_queue.queue_extraction(topic)
+                logger.info(f"Queued extraction job {job_id} for lite topic: {topic}")
+            except Exception as e:
+                logger.warning(f"Failed to queue extraction for {topic}: {e}")
 
             return {
                 "status": "queued",
