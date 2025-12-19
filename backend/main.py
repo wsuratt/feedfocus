@@ -748,13 +748,13 @@ async def get_for_you_feed(
 
     try:
         feed_service = FeedService()
-        insights = feed_service.generate_for_you_feed(user_id, limit, offset)
+        insights, has_more = feed_service.generate_for_you_feed(user_id, limit, offset, check_has_more=True)
 
         return {
             "feed_type": "for_you",
             "insights": insights,
             "count": len(insights),
-            "has_more": len(insights) == limit
+            "has_more": has_more
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate feed: {str(e)}")

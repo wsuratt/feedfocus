@@ -422,6 +422,9 @@ class ExtractionQueue:
                 f"from {result.get('sources_processed', 0)} sources in {duration:.1f}s"
             )
 
+            # Send emails to any queued lite leads for this topic
+            self._process_queued_lite_leads(topic)
+
         except Exception as e:
             logger.error(f"Error completing job: {e}")
 
@@ -527,6 +530,79 @@ class ExtractionQueue:
 
         error_lower = error.lower()
         return any(pattern in error_lower for pattern in transient_patterns)
+
+    def _process_queued_lite_leads(self, topic: str):
+        """
+        Send emails to all queued lite leads for a topic after extraction completes.
+
+        Args:
+            topic: Topic that just completed extraction
+        """
+        try:
+            from backend.services.email_service import EmailService
+
+            email_service = EmailService()
+
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # Find all queued leads for this topic
+                cursor.execute("""
+                    SELECT email, topic
+                    FROM lite_leads
+                    WHERE topic = ? AND status = 'queued'
+                """, (topic,))
+
+                queued_leads = cursor.fetchall()
+
+                if not queued_leads:
+                    logger.info(f"No queued lite leads found for topic: {topic}")
+                    return
+
+                logger.info(f"Processing {len(queued_leads)} queued lite leads for topic: {topic}")
+
+                for row in queued_leads:
+                    email, lead_topic = row
+
+                    try:
+                        # Get top insights for this lead (excluding already sent)
+                        insights = email_service.get_top_insights(lead_topic, limit=10, email=email)
+
+                        if len(insights) >= 5:
+                            # Send email
+                            insights_to_send = insights[:10]
+                            success = email_service.send_insights_email(
+                                email,
+                                lead_topic,
+                                insights_to_send
+                            )
+
+                            if success:
+                                # Update lead status
+                                cursor.execute("""
+                                    UPDATE lite_leads
+                                    SET status = 'immediate',
+                                        insights_sent = ?,
+                                        email_sent_at = ?
+                                    WHERE email = ? AND topic = ?
+                                """, (len(insights_to_send), datetime.now().isoformat(), email, lead_topic))
+
+                                # Mark insights as sent
+                                email_service.mark_email_sent(email, lead_topic, insights_to_send)
+
+                                logger.info(f"Sent email to {email} for topic: {lead_topic}")
+                            else:
+                                logger.warning(f"Failed to send email to {email} for topic: {lead_topic}")
+                        else:
+                            logger.warning(f"Still insufficient insights ({len(insights)}) for {email} on topic: {lead_topic}")
+
+                    except Exception as e:
+                        logger.error(f"Error processing queued lead {email} for {lead_topic}: {e}")
+
+                conn.commit()
+
+        except Exception as e:
+            logger.error(f"Error processing queued lite leads for topic {topic}: {e}")
 
     def _set_estimated_completion(
         self,
