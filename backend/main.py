@@ -1641,7 +1641,8 @@ async def submit_lite_request(submission: LiteSubmission):
 
             # Queue extraction job
             try:
-                job_id = extraction_queue.queue_extraction(topic)
+                result = extraction_queue.add_job(topic, user_id="lite_landing", priority=5)
+                job_id = result["job_id"]
                 logger.info(f"Queued extraction job {job_id} for lite topic: {topic}")
             except Exception as e:
                 logger.warning(f"Failed to queue extraction for {topic}: {e}")
