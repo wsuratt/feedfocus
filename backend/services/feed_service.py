@@ -112,8 +112,9 @@ class FeedService:
         self,
         user_id: str,
         limit: int = 30,
-        offset: int = 0
-    ) -> List[Dict]:
+        offset: int = 0,
+        check_has_more: bool = False
+    ) -> List[Dict] | tuple[List[Dict], bool]:
         """
         Generate For You feed using v2 algorithm with personalized scoring
         and diversity-aware composition.
@@ -122,9 +123,11 @@ class FeedService:
             user_id: User identifier
             limit: Number of insights to return
             offset: Pagination offset (not used in v2 - loads larger pool)
+            check_has_more: If True, also return whether more insights exist
 
         Returns:
-            List of ranked insights with metadata
+            Tuple of (insights list, has_more boolean) if check_has_more=True
+            Just insights list if check_has_more=False (for backwards compatibility)
         """
         from backend.services.feed_builder import FeedBuilder
 
@@ -133,7 +136,7 @@ class FeedService:
 
         # Get candidate pool (200 insights, pre-filtered by SQL)
         # This is larger than requested to allow diversity filtering
-        candidate_pool_size = min(200, limit * 4)
+        candidate_pool_size = min(200, (limit + 1) * 4)
 
         # Get viewed insights to exclude
         cursor.execute("""
@@ -171,11 +174,18 @@ class FeedService:
         conn.close()
 
         if not candidates:
-            return []
+            return ([], False) if check_has_more else []
 
         # Use FeedBuilder for personalized scoring and diversity
+        # Request limit+1 to check if more exist
         builder = FeedBuilder(self.db_path)
-        feed = builder.build_feed(user_id, candidates, length=limit)
+        feed = builder.build_feed(user_id, candidates, length=limit + 1)
+
+        # Check if more insights exist
+        has_more = len(feed) > limit
+
+        # Return only requested limit
+        feed = feed[:limit]
 
         # Mark as viewed
         if feed:
@@ -185,7 +195,7 @@ class FeedService:
             conn.commit()
             conn.close()
 
-        return feed
+        return (feed, has_more) if check_has_more else feed
 
     def record_engagement(
         self,
