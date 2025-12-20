@@ -176,16 +176,13 @@ class FeedService:
         if not candidates:
             return ([], False) if check_has_more else []
 
+        # Check if more insights exist by looking at candidate pool
+        # If we got the full pool, there are likely more beyond it
+        has_more = len(candidates) >= candidate_pool_size
+
         # Use FeedBuilder for personalized scoring and diversity
-        # Request limit+1 to check if more exist
         builder = FeedBuilder(self.db_path)
-        feed = builder.build_feed(user_id, candidates, length=limit + 1)
-
-        # Check if more insights exist
-        has_more = len(feed) > limit
-
-        # Return only requested limit
-        feed = feed[:limit]
+        feed = builder.build_feed(user_id, candidates, length=limit)
 
         # Mark as viewed
         if feed:
