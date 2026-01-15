@@ -11,6 +11,7 @@ anthropic==0.18.1
 
 # Search
 ddgs==1.0.0
+exa_py>=1.0.0  # Optional: for Exa AI search provider (faster, paid)
 
 # PDF processing
 PyPDF2==3.0.1

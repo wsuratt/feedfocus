@@ -5,10 +5,10 @@ Discovers and previews high-quality sources using dynamic search queries
 
 import asyncio
 import re
-from datetime import datetime
-from typing import Dict, Any, List
-from ddgs import DDGS
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional
 from automation.content_fetcher import fetch_content_sample
+from automation.search_providers import SearchProvider, SearchResult, get_search_provider
 
 # Tier 1 domains (highest quality - government, research, quality analysis)
 TIER_1_DOMAINS = [
@@ -179,12 +179,21 @@ def detect_recency(content: str, url: str) -> tuple:
     return (recency_score, most_recent_year)
 
 
-async def preview_source(candidate: dict) -> dict:
-    """Preview a source and calculate quality score"""
+async def preview_source(candidate: dict, skip_fetch: bool = False) -> dict:
+    """
+    Preview a source and calculate quality score
+
+    Args:
+        candidate: Source candidate dict with url, title, etc.
+        skip_fetch: If True, use pre-fetched content from candidate['content']
+    """
     url = candidate['url']
 
     try:
-        content = await fetch_content_sample(url)
+        if skip_fetch and candidate.get('content'):
+            content = candidate['content']
+        else:
+            content = await fetch_content_sample(url)
 
         if not content or len(content) < 200:
             return {**candidate, 'quality_score': 0}
@@ -246,50 +255,59 @@ async def preview_source(candidate: dict) -> dict:
         return {**candidate, 'quality_score': 0, 'error': str(e)}
 
 
-async def discover_sources_with_queries(queries: list, max_results: int = 50) -> list:
+async def discover_sources_with_queries(
+    queries: list,
+    max_results: int = 50,
+    provider: Optional[SearchProvider] = None
+) -> list:
     """
     Core production discovery function - searches, filters, and previews sources
 
     Args:
         queries: List of search query strings
         max_results: Max sources to return
+        provider: Search provider to use (defaults to env var SEARCH_PROVIDER)
 
     Returns:
         List of previewed sources with quality scores
     """
+    if provider is None:
+        provider = get_search_provider()
+
+    print(f"Using search provider: {provider.name}")
 
     candidates = []
     seen_urls = set()
 
-    # Search using all queries
+    start_date = datetime.now() - timedelta(days=365 * 3)
+
     for query in queries:
         print(f"Searching: {query}")
 
         try:
-            with DDGS() as ddgs:
-                results = list(ddgs.text(query, max_results=20))
+            results = await provider.search(
+                query=query,
+                max_results=20,
+                include_domains=PREFERRED_DOMAINS,
+                exclude_domains=BANNED_DOMAINS,
+                start_date=start_date,
+            )
 
-                for result in results:
-                    url = result['href']
+            for result in results:
+                if result.url in seen_urls:
+                    continue
+                seen_urls.add(result.url)
 
-                    if url in seen_urls:
-                        continue
-                    seen_urls.add(url)
-
-                    # Filter by domain
-                    is_preferred = any(domain in url.lower() for domain in PREFERRED_DOMAINS)
-                    is_banned = any(domain in url.lower() for domain in BANNED_DOMAINS)
-
-                    if is_banned:
-                        continue
-
-                    candidates.append({
-                        'url': url,
-                        'title': result['title'],
-                        'description': result.get('body', ''),
-                        'is_preferred_domain': is_preferred,
-                        'query': query
-                    })
+                candidates.append({
+                    'url': result.url,
+                    'title': result.title,
+                    'description': result.description,
+                    'is_preferred_domain': result.is_preferred_domain,
+                    'query': result.query,
+                    'content': result.content,
+                    'published_date': result.published_date,
+                    'highlights': result.highlights,
+                })
 
         except Exception as e:
             print(f"  Error searching: {e}")
@@ -298,30 +316,30 @@ async def discover_sources_with_queries(queries: list, max_results: int = 50) ->
     print(f"  Preferred domains: {sum(1 for c in candidates if c['is_preferred_domain'])}")
     print(f"  Other domains: {sum(1 for c in candidates if not c['is_preferred_domain'])}")
 
-    # Preview sources
     total_to_preview = min(len(candidates), max_results)
-    print(f"Previewing quality scores for {total_to_preview} sources...")
-    print(f"  (This may take 2-5 minutes for large batches)\n")
+
+    if provider.fetches_content:
+        print(f"Scoring {total_to_preview} sources (content pre-fetched by {provider.name})...\n")
+    else:
+        print(f"Previewing quality scores for {total_to_preview} sources...")
+        print(f"  (This may take 2-5 minutes for large batches)\n")
 
     previewed = []
     for idx, candidate in enumerate(candidates[:max_results], 1):
         try:
-            # Progress update every 10 sources
             if idx % 10 == 0 or idx == 1:
-                print(f"  Progress: {idx}/{total_to_preview} sources previewed...")
+                print(f"  Progress: {idx}/{total_to_preview} sources scored...")
 
-            preview = await preview_source(candidate)
+            preview = await preview_source(candidate, skip_fetch=provider.fetches_content)
             if preview.get('quality_score', 0) > 0:
                 previewed.append(preview)
         except Exception as e:
-            # Log failures for debugging
             if idx % 10 == 0:
-                print(f"  (Skipped {sum(1 for _ in range(max(0, idx-10), idx) if True)} failed sources)")
+                print(f"  (Skipped some failed sources)")
             pass
 
-    print(f"✓ Completed preview: {len(previewed)} quality sources found\n")
+    print(f"Completed preview: {len(previewed)} quality sources found\n")
 
-    # Sort by quality score
     previewed.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
 
     return previewed
